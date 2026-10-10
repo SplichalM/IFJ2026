@@ -103,11 +103,11 @@ This repository uses the following branch structure and rules.
 - Each developer works under their own namespace based on xlogin.
 
 Branch pattern:
-- `feature/<xlogin>/<feature-name>`
+- `feature/<topic>/<feature-name>`
 
 Examples:
-- `feature/xsplicm/auth-refresh-token`
-- `feature/xsplicm/ui-navbar`
+- `feature/lexer/auth-refresh-token`
+- `feature/symtable/ui-navbar`
 
 ### hotfix/*
 - Used for small code fixes (usually urgent).
@@ -141,7 +141,7 @@ Example:
 main
 develop
 feature/
-  └── <xlogin>/
+  └── <topic>/
       ├── <feature-name>
       └── <feature-name>
 hotfix/
