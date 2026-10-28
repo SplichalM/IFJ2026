@@ -3,6 +3,8 @@
 
 #include "ast.h"
 #include "symtable.h"
+#include <stdlib.h>
+#include <stdio.h>
 
 typedef struct sem_scope_t {
 	symtable_t vars;
@@ -17,5 +19,9 @@ typedef struct sem_context_t {
 } sem_context_t;
 
 int sem_analyze(ASTNode* tree, symtable_t* functions);
+
+void sem_error(int err_code, const char* err_msg);
+
+static void scope_push(sem_context_t* context);
 
 #endif
