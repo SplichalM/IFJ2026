@@ -34,6 +34,13 @@ static symtable_node_t* scope_lookup(sem_context_t* context, const char* key) {
 	return result;
 }
 
+static symtable_node_t* scope_declare(sem_context_t* context, const char* key, DataType type, bool is_mutable) {
+	// type a is_mutable zatim nevyuzite, musim zmenit symtable - tomas
+	symtable_insert(&context->top->vars, key, SYM_LOCAL_VAR, 0);
+	symtable_node_t* result = symtable_search(&context->top->vars, key);
+	return result;
+}
+
 void sem_error(int err_code, const char* err_msg) {
 	fprintf(stderr, "%s\n", err_msg);
 	exit(err_code);
