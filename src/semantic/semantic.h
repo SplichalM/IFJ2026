@@ -23,5 +23,6 @@ int sem_analyze(ASTNode* tree, symtable_t* functions);
 void sem_error(int err_code, const char* err_msg);
 
 static void scope_push(sem_context_t* context);
+static void scope_pop(sem_context_t* context);
 
 #endif
