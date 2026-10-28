@@ -25,6 +25,15 @@ static void scope_pop(sem_context_t* context) {
 	free(old);
 }
 
+static symtable_node_t* scope_lookup(sem_context_t* context, const char* key) {
+	sem_scope_t* current = context->top;
+	symtable_node_t* result = NULL;
+	while (current != NULL && (result = symtable_search(&current->vars, key)) == NULL) {
+		current = current->next;
+	}
+	return result;
+}
+
 void sem_error(int err_code, const char* err_msg) {
 	fprintf(stderr, "%s\n", err_msg);
 	exit(err_code);
