@@ -41,6 +41,17 @@ static symtable_node_t* scope_declare(sem_context_t* context, const char* key, D
 	return result;
 }
 
+static char* sem_unique_name(sem_context_t* context, const char* name) {
+	int length = snprintf(NULL, 0, "%s$%u", name, context->count);
+	char* buffer = malloc(sizeof(char) * (length + 1));
+	if (buffer == NULL) {
+		sem_error(99, "Error allocating memory for unique name");
+	}
+	snprintf(buffer, length + 1, "%s$%u", name, context->count);
+	context->count++;
+	return buffer;
+}
+
 void sem_error(int err_code, const char* err_msg) {
 	fprintf(stderr, "%s\n", err_msg);
 	exit(err_code);
