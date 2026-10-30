@@ -1,7 +1,44 @@
 #include "semantic.h"
 
 int sem_analyze(ASTNode* tree, symtable_t* functions) {
+	sem_check_main(tree);
+	ASTNode* current = tree->as.list.head;
+	while (current != NULL) {
+		sem_analyze_function(functions, current);
+		current = current->next;
+	}
+
 	return 0;
+}
+
+void sem_analyze_function(symtable_t* functions, ASTNode* func_def) {
+	symtable_node_t* func = symtable_search(functions, func_def->as.func_def.name);
+
+	sem_context_t context;
+	context.functions = functions;
+	context.top = NULL;
+	context.curr_func = func;
+	context.count = 0;
+
+	scope_push(&context);
+
+	ASTNode* current = func_def->as.func_def.params->as.list.head;
+	while (current != NULL) {
+		scope_declare(&context, current->as.func_param.name, current->as.func_param.param_type, false);
+		current = current->next;
+	}
+	sem_block(&context, func_def->as.func_def.body);
+	scope_pop(&context);
+}
+
+static void sem_block(sem_context_t* context, ASTNode* block) {
+	scope_push(context);
+	ASTNode* current = block->as.list.head;
+	while (current != NULL) {
+		sem_statement(context, current); // jeste neni
+		current = current->next;
+	}
+	scope_pop(context);
 }
 
 static void scope_push(sem_context_t* context) {

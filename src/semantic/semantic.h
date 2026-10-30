@@ -29,5 +29,7 @@ static symtable_node_t* scope_declare(sem_context_t* context, const char* key, D
 
 static char* sem_unique_name(sem_context_t* context, const char* name);
 static void sem_check_main(ASTNode* tree);
+void sem_analyze_function(symtable_t* functions, ASTNode* func_def);
+static void sem_block(sem_context_t* context, ASTNode* block);
 
 #endif
