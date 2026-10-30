@@ -56,3 +56,28 @@ void sem_error(int err_code, const char* err_msg) {
 	fprintf(stderr, "%s\n", err_msg);
 	exit(err_code);
 }
+
+static void sem_check_main(ASTNode* tree) {
+	ASTNode* current = tree->as.list.head;
+	int main_count = 0;
+	ASTNode* main_func = NULL;
+	while (current != NULL) {
+		if (current->as.func_def.is_main == true) {
+			main_count++;
+			main_func = current;
+		}
+		current = current->next;
+	}
+	if (main_count == 0) {
+		sem_error(3, "Main function not defined");
+	}
+	else if (main_count > 1) {
+		sem_error(4, "Multiple definitions of main function");
+	}
+	if (main_func->as.func_def.params->as.list.head != NULL) {
+		sem_error(5, "Main function has parameters");
+	}
+	if (main_func->as.func_def.return_type != TYPE_UNIT) {
+		sem_error(6, "Main function is not returning type unit");
+	}
+}

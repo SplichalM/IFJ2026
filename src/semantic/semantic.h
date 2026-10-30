@@ -28,5 +28,6 @@ static symtable_node_t* scope_lookup(sem_context_t* context, const char* key);
 static symtable_node_t* scope_declare(sem_context_t* context, const char* key, DataType type, bool is_mutable);
 
 static char* sem_unique_name(sem_context_t* context, const char* name);
+static void sem_check_main(ASTNode* tree);
 
 #endif
