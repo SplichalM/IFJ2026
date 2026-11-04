@@ -118,3 +118,30 @@ static void sem_check_main(ASTNode* tree) {
 		sem_error(6, "Main function is not returning type unit");
 	}
 }
+
+static void sem_statement(sem_context_t* context, ASTNode* current) {
+	switch (current->type) {
+	case NODE_VAR_DECL:
+		sem_var_decl(context, current);
+		break;
+	case NODE_ASSIGN:
+		sem_assign(context, current);
+		break;
+	case NODE_IF:
+		sem_if(context, current);
+		break;
+	case NODE_WHILE:
+		sem_while(context, current);
+		break;
+	case NODE_FUNC_CALL:
+		break;
+	case NODE_RETURN:
+		if (current->as.ret_stmt.expr != NULL) {
+			sem_expr_type(context, current->as.ret_stmt.expr);
+		}
+		break;
+	default:
+		sem_expr_type(context, current);
+		break;
+	}
+}
