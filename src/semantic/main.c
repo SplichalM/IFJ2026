@@ -145,3 +145,11 @@ static void sem_statement(sem_context_t* context, ASTNode* current) {
 		break;
 	}
 }
+
+DataType sem_identifier(sem_context_t* context, ASTNode* node) {
+	symtable_node_t* var = scope_lookup(context, node->as.identifier.name);
+	if (var == NULL) {
+		sem_error(3, "Variable not defined");
+	}
+	return TYPE_INT; // zatim, dodelat symtable
+}
