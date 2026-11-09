@@ -190,3 +190,35 @@ static void sem_while(sem_context_t* context, ASTNode* node) {
 	sem_check_condition(context, node->as.while_stmt.cond);
 	sem_block(context, node->as.while_stmt.body);
 }
+
+static void sem_add_builtin(symtable_t* symtable, const char* name, DataType return_type, int param_count, const DataType* param_types) {
+	sym_data_t* func = symtable_insert(symtable, name, SYM_FUNCTION);
+	if (func == NULL) {
+		sem_error(99, "");
+	}
+	func->as.func.return_type = return_type;
+	func->as.func.param_count = param_count;
+	func->as.func.state = FUNC_DONE;
+	func->as.func.is_builtin = true;
+	func->as.func.expl_return_type = true;
+	if (param_count != 0) {
+		func->as.func.param_types = malloc(sizeof(DataType) * param_count);
+		if (func->as.func.param_types == NULL) {
+			sem_error(99, "");
+		}
+		memcpy(func->as.func.param_types, param_types, sizeof(DataType) * param_count);
+	}
+}
+
+void sem_register_builtins(symtable_t* symtable) {
+	sem_add_builtin(symtable, "print", TYPE_UNIT, 1, (DataType[]) { TYPE_ANY });
+	sem_add_builtin(symtable, "readLine", TYPE_STRING, 0, NULL);
+	sem_add_builtin(symtable, "readInt", TYPE_INT, 0, NULL);
+	sem_add_builtin(symtable, "readDouble", TYPE_DOUBLE, 0, NULL);
+	sem_add_builtin(symtable, "toStr", TYPE_STRING, 1, (DataType[]) { TYPE_ANY });
+	sem_add_builtin(symtable, "toInt", TYPE_INT, 1, (DataType[]) { TYPE_DOUBLE });
+	sem_add_builtin(symtable, "strLength", TYPE_INT, 1, (DataType[]) { TYPE_STRING });
+	sem_add_builtin(symtable, "subStr", TYPE_STRING, 3, (DataType[]) { TYPE_STRING, TYPE_INT, TYPE_INT });
+	sem_add_builtin(symtable, "ord", TYPE_INT, 2, (DataType[]) { TYPE_STRING, TYPE_INT });
+	sem_add_builtin(symtable, "chr", TYPE_STRING, 1, (DataType[]) { TYPE_INT });
+}
