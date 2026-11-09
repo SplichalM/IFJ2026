@@ -14,7 +14,7 @@ typedef struct sem_scope_t {
 typedef struct sem_context_t {
 	symtable_t* functions;
 	sem_scope_t* top;
-	symtable_node_t* curr_func;
+	sym_data_t* curr_func;
 	unsigned int count;
 } sem_context_t;
 
@@ -24,8 +24,8 @@ void sem_error(int err_code, const char* err_msg);
 
 static void scope_push(sem_context_t* context);
 static void scope_pop(sem_context_t* context);
-static symtable_node_t* scope_lookup(sem_context_t* context, const char* key);
-static symtable_node_t* scope_declare(sem_context_t* context, const char* key, DataType type, bool is_mutable);
+static sym_data_t* scope_lookup(sem_context_t* context, const char* key);
+static sym_data_t* scope_declare(sem_context_t* context, const char* key, DataType type, bool is_mutable);
 
 static char* sem_unique_name(sem_context_t* context, const char* name);
 static void sem_check_main(ASTNode* tree);

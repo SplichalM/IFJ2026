@@ -12,7 +12,7 @@ int sem_analyze(ASTNode* tree, symtable_t* functions) {
 }
 
 void sem_analyze_function(symtable_t* functions, ASTNode* func_def) {
-	symtable_node_t* func = symtable_search(functions, func_def->as.func_def.name);
+	sym_data_t* func = symtable_search(functions, func_def->as.func_def.name);
 
 	sem_context_t context;
 	context.functions = functions;
@@ -62,20 +62,24 @@ static void scope_pop(sem_context_t* context) {
 	free(old);
 }
 
-static symtable_node_t* scope_lookup(sem_context_t* context, const char* key) {
+static sym_data_t* scope_lookup(sem_context_t* context, const char* key) {
 	sem_scope_t* current = context->top;
-	symtable_node_t* result = NULL;
+	sym_data_t* result = NULL;
 	while (current != NULL && (result = symtable_search(&current->vars, key)) == NULL) {
 		current = current->next;
 	}
 	return result;
 }
 
-static symtable_node_t* scope_declare(sem_context_t* context, const char* key, DataType type, bool is_mutable) {
-	// type a is_mutable zatim nevyuzite, musim zmenit symtable - tomas
-	symtable_insert(&context->top->vars, key, SYM_LOCAL_VAR, 0);
-	symtable_node_t* result = symtable_search(&context->top->vars, key);
-	return result;
+static sym_data_t* scope_declare(sem_context_t* context, const char* key, DataType type, bool is_mutable) {
+	sym_data_t* var = symtable_insert(&context->top->vars, key, SYM_LOCAL_VAR);
+	if (var == NULL) {
+		sem_error(4, "Variable already exists");
+	}
+	var->as.var.var_type = type;
+	var->as.var.is_mutable = is_mutable;
+	var->as.var.unique_name = sem_unique_name(context, key);
+	return var;
 }
 
 static char* sem_unique_name(sem_context_t* context, const char* name) {
@@ -147,11 +151,11 @@ static void sem_statement(sem_context_t* context, ASTNode* current) {
 }
 
 DataType sem_identifier(sem_context_t* context, ASTNode* node) {
-	symtable_node_t* var = scope_lookup(context, node->as.identifier.name);
+	sym_data_t* var = scope_lookup(context, node->as.identifier.name);
 	if (var == NULL) {
 		sem_error(3, "Variable not defined");
 	}
-	return TYPE_INT; // zatim, dodelat symtable
+	return var->as.var.var_type;
 }
 
 static void sem_var_decl(sem_context_t* context, ASTNode* node) {
@@ -164,12 +168,14 @@ static void sem_var_decl(sem_context_t* context, ASTNode* node) {
 }
 
 static void sem_assign(sem_context_t* context, ASTNode* node) {
-	symtable_node_t* var = scope_lookup(context, node->as.assign.target_name);
+	sym_data_t* var = scope_lookup(context, node->as.assign.target_name);
 	if (var == NULL) {
 		sem_error(3, "Not defined");
 	}
+	if (var->as.var.is_mutable == false) {
+		sem_error(7, "Non mutable");
+	}
 	sem_expr_type(context, node->as.assign.value);
-	// doplnit symtable pro is mutable kvuli chyby 7
 }
 
 static void sem_if(sem_context_t* context, ASTNode* node) {
