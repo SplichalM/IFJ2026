@@ -153,3 +153,34 @@ DataType sem_identifier(sem_context_t* context, ASTNode* node) {
 	}
 	return TYPE_INT; // zatim, dodelat symtable
 }
+
+static void sem_var_decl(sem_context_t* context, ASTNode* node) {
+	DataType var_type = sem_expr_type(context, node->as.var_decl.value);
+
+	if (node->as.var_decl.declared_type != TYPE_UNKNOWN) {
+		var_type = node->as.var_decl.declared_type;
+	}
+	scope_declare(context, node->as.var_decl.name, var_type, node->as.var_decl.is_mutable);
+}
+
+static void sem_assign(sem_context_t* context, ASTNode* node) {
+	symtable_node_t* var = scope_lookup(context, node->as.assign.target_name);
+	if (var == NULL) {
+		sem_error(3, "Not defined");
+	}
+	sem_expr_type(context, node->as.assign.value);
+	// doplnit symtable pro is mutable kvuli chyby 7
+}
+
+static void sem_if(sem_context_t* context, ASTNode* node) {
+	sem_check_condition(context, node->as.if_stmt.cond);
+	sem_block(context, node->as.if_stmt.then_block);
+	if (node->as.if_stmt.else_block != NULL) {
+		sem_block(context, node->as.if_stmt.else_block);
+	}
+}
+
+static void sem_while(sem_context_t* context, ASTNode* node) {
+	sem_check_condition(context, node->as.while_stmt.cond);
+	sem_block(context, node->as.while_stmt.body);
+}

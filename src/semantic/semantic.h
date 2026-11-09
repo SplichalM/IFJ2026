@@ -33,5 +33,9 @@ void sem_analyze_function(symtable_t* functions, ASTNode* func_def);
 static void sem_block(sem_context_t* context, ASTNode* block);
 static void sem_statement(sem_context_t* context, ASTNode* current);
 DataType sem_identifier(sem_context_t* context, ASTNode* node);
+static void sem_var_decl(sem_context_t* context, ASTNode* node);
+static void sem_assign(sem_context_t* context, ASTNode* node);
+static void sem_if(sem_context_t* context, ASTNode* node);
+static void sem_while(sem_context_t* context, ASTNode* node);
 
 #endif
