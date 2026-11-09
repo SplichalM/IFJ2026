@@ -39,5 +39,6 @@ static void sem_if(sem_context_t* context, ASTNode* node);
 static void sem_while(sem_context_t* context, ASTNode* node);
 
 static void sem_add_builtin(symtable_t* symtable, const char* name, DataType return_type, int param_count, const DataType* param_types);
+DataType sem_call(sem_context_t* context, ASTNode* node);
 
 #endif

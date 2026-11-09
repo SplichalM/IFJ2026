@@ -138,6 +138,7 @@ static void sem_statement(sem_context_t* context, ASTNode* current) {
 		sem_while(context, current);
 		break;
 	case NODE_FUNC_CALL:
+		sem_call(context, current);
 		break;
 	case NODE_RETURN:
 		if (current->as.ret_stmt.expr != NULL) {
@@ -221,4 +222,33 @@ void sem_register_builtins(symtable_t* symtable) {
 	sem_add_builtin(symtable, "subStr", TYPE_STRING, 3, (DataType[]) { TYPE_STRING, TYPE_INT, TYPE_INT });
 	sem_add_builtin(symtable, "ord", TYPE_INT, 2, (DataType[]) { TYPE_STRING, TYPE_INT });
 	sem_add_builtin(symtable, "chr", TYPE_STRING, 1, (DataType[]) { TYPE_INT });
+}
+
+DataType sem_call(sem_context_t* context, ASTNode* node) {
+	sym_data_t* func = symtable_search(context->functions, node->as.func_call.name);
+	if (func == NULL) {
+		sem_error(3, "Function not defined");
+	}
+	ASTNode* current = node->as.func_call.args->as.list.head;
+	int i = 0;
+	while (current != NULL) {
+		if (i >= func->as.func.param_count) {
+			sem_error(5, "Too many arguments");
+		}
+		DataType type = sem_expr_type(context, current);
+		if (type != func->as.func.param_types[i] && func->as.func.param_types[i] != TYPE_ANY) { // Int a Double se doplni
+			sem_error(5, "Wrong parameter type");
+		}
+		i++;
+		current = current->next;
+	}
+	if (i < func->as.func.param_count) {
+		sem_error(5, "Too little arguments");
+	}
+
+	if (func->as.func.expl_return_type == false) {
+		sem_ensure_function_analyzed(context->functions, func);
+	}
+
+	return func->as.func.return_type;
 }
