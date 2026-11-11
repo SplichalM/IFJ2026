@@ -14,6 +14,7 @@ typedef struct {
 
 static Lexer lexer;
 
+// Uvolneni pameti
 void lexer_free(void) {
     free(lexer.input);
     lexer.input = NULL;
@@ -21,39 +22,51 @@ void lexer_free(void) {
     lexer.position = 0;
 }
 
+// Inicializace lexeru a nacteni vstupu ze standardniho vstupu
 int lexer_init(void) {
     lexer_free();
 
+	// Inicializace vstupu (zacinam na 16ti bajtech)
     size_t capacity = 16;
     lexer.input = malloc(capacity);
     if (lexer.input == NULL) {
         return 99;
     }
 
-    int character;
-    while ((character = fgetc(stdin)) != EOF) {
+    // Nacte prvni znak
+    int character = fgetc(stdin);
+    while (character != EOF) {
+		// Pokud je delka bufferu rovna kapacite, zvetsime buffer
         if (lexer.length == capacity) {
+			// Kontrola maximalni velikosti systemove pameti pri zvetsovani bufferu
             if (capacity > SIZE_MAX / 2) {
                 lexer_free();
                 return 99;
             }
 
+            // Vytvoreni noveho bufferu
             size_t new_capacity = capacity * 2;
             char *new_input = malloc(new_capacity);
             if (new_input == NULL) {
                 lexer_free();
                 return 99;
             }
+
+            // Kopirovani obsahu
             memcpy(new_input, lexer.input, lexer.length);
             free(lexer.input);
             lexer.input = new_input;
             capacity = new_capacity;
         }
 
-        lexer.input[lexer.length] = (char)character;
+		// Prevod znaku z int v rozmezi 0-255 + EOF (-1) na char v rozmezi -128-127
+        char input_character = (char)character;
+        lexer.input[lexer.length] = input_character;
         lexer.length++;
+        character = fgetc(stdin);
     }
 
+	// kontrola chyby pri cteni ze standardniho vstupu
     if (ferror(stdin)) {
         lexer_free();
         return 99;
@@ -62,6 +75,7 @@ int lexer_init(void) {
     return 0;
 }
 
+// Vytvoreni tokenu pro chybu
 static Token lexer_internal_error(void) {
     Token token = {0};
     token.type = TOKEN_ERROR;
@@ -73,11 +87,14 @@ static Token lexer_internal_error(void) {
     return token;
 }
 
+// Ziskani dalsiho tokenu
 Token lexer_next(void) {
+	// Prazdny vstup
     if (lexer.input == NULL) {
         return lexer_internal_error();
     }
 
+	// Preskoceni bilych znaku (mezery, tabulatory, carriage return)
     while (lexer.position < lexer.length &&
            (lexer.input[lexer.position] == ' ' ||
             lexer.input[lexer.position] == '\t' ||
@@ -85,35 +102,36 @@ Token lexer_next(void) {
         lexer.position++;
     }
 
+	// Konec vstupu
     if (lexer.position == lexer.length) {
         Token token = {0};
         token.type = TOKEN_EOF;
         return token;
     }
 
+    // Zpracovani konce radku
     if (lexer.input[lexer.position] == '\n') {
         size_t next = lexer.position + 1;
-        size_t indentation = 0;
-        while (next < lexer.length && lexer.input[next] == ' ') {
-            if (indentation == INT_MAX) {
+        size_t space_count = 0;
+		// Pocitani poctu mezer na zacatku radku
+        while (next < lexer.length) {
+            if (lexer.input[next] != ' ') {
+                break;
+            }
+
+			// Kontrola preteceni int pri pocitani mezer
+            if (space_count == INT_MAX) {
                 return lexer_internal_error();
             }
-            indentation++;
+            space_count++;
             next++;
         }
 
-        char *text = malloc(2);
-        if (text == NULL) {
-            return lexer_internal_error();
-        }
-        text[0] = '\n';
-        text[1] = '\0';
-
+		// Vytvoreni tokenu pro konec radku
         Token token = {0};
         token.type = TOKEN_EOL;
-        token.context = text;
         token.length = 1;
-        token.value = (int)indentation;
+        token.value = (int)space_count;
         lexer.position++;
         return token;
     }
@@ -121,6 +139,7 @@ Token lexer_next(void) {
     return lexer_internal_error();
 }
 
+// Ziskani dalsiho tokenu bez posunu pozice
 Token lexer_peek(void) {
     Token token = lexer_next();
     if (token.type != TOKEN_ERROR) {

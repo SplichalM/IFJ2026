@@ -10,17 +10,28 @@ trap 'rm -f "$test_binary"' EXIT HUP INT TERM
     "$repo_dir/tests/lexer/test.c" -Wl,--wrap=malloc -Wl,--wrap=free \
     -o "$test_binary"
 
-printf '' | "$test_binary" eof
+printf 'LX-02: opakovana kontrola konce vstupu\n'
+printf '' | "$test_binary" lx02-eof
 for length in 15 16 17 31 32 33 63 64 65; do
-    printf '%*s' "$length" '' | "$test_binary" eof
-    { printf '%*s' "$length" ''; printf '\n  \n'; } | "$test_binary" eol
+    printf 'LX-02: opakovana kontrola konce vstupu (%s mezer)\n' "$length"
+    printf '%*s' "$length" '' | "$test_binary" lx02-eof
+    printf 'LX-02: nahled a cteni konce radku (%s mezer)\n' "$length"
+    { printf '%*s' "$length" ''; printf '\n  \n'; } | "$test_binary" lx02-eol
 done
-printf ' \n  \n' | "$test_binary" eol
-printf '' | "$test_binary" init-first
-printf '%17s' '' | "$test_binary" init-grow
-printf '%33s' '' | "$test_binary" init-grow-again
-"$test_binary" init-read </
-printf '\n' | "$test_binary" peek-error
-printf '\n' | "$test_binary" peek-no-memory
-printf 'a' | "$test_binary" unimplemented
-printf 'Lexer tests passed\n'
+printf 'LX-02: nahled a cteni konce radku\n'
+printf ' \n  \n' | "$test_binary" lx02-eol
+printf 'LX-02: chyba prvni alokace pri inicializaci\n'
+printf '' | "$test_binary" lx02-init-first
+printf 'LX-02: chyba prvniho zvetseni vstupu\n'
+printf '%17s' '' | "$test_binary" lx02-init-grow
+printf 'LX-02: chyba druheho zvetseni vstupu\n'
+printf '%33s' '' | "$test_binary" lx02-init-grow-again
+printf 'LX-02: chyba cteni vstupu\n'
+"$test_binary" lx02-init-read </
+printf 'LX-02: chyba pri nahledu\n'
+printf 'a' | "$test_binary" lx02-peek-error
+printf 'LX-02: chyba alokace textu chyby pri nahledu\n'
+printf 'a' | "$test_binary" lx02-peek-no-memory
+printf 'LX-02: dosud nepodporovany znak\n'
+printf 'a' | "$test_binary" lx02-unimplemented
+printf 'LX-02: vsechny testy prosly\n'
