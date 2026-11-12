@@ -128,10 +128,15 @@ static Token read_identifier_or_keyword(void) {
     }
 
     if (length == 1 && lexer.input[start] == '_') {
-        Token error = {.type = TOKEN_ERROR, .value = 99};
-        error.context = malloc(sizeof "1");
+        Token error;
+        error.type = TOKEN_ERROR;
+        error.value = 99;
+        error.float_value = 0.0;
+        error.length = 0;
+        error.context = malloc(2);
         if (error.context != NULL) {
-            memcpy(error.context, "1", sizeof "1");
+            error.context[0] = '1';
+            error.context[1] = '\0';
             error.value = 1;
         }
         return error;
@@ -156,6 +161,277 @@ static Token read_identifier_or_keyword(void) {
     return token;
 }
 
+// Kontrola, zda je znak operatorem
+static int is_operator(Token *token) {
+    size_t start = lexer.position;
+    char first = lexer.input[start];
+    char next = '\0';
+    if (start + 1 < lexer.length) {
+        next = lexer.input[start + 1];
+    }
+    size_t length = 1;
+
+    switch (first) {
+        case '+':
+        case '-':
+        case '*':
+            break;
+        case '=':
+        case '<':
+        case '>':
+            if (next == '=') {
+                length = 2;
+            }
+            break;
+        case '!':
+            if (next != '=') {
+                token->type = TOKEN_ERROR;
+                token->value = 99;
+                token->float_value = 0.0;
+                token->length = 0;
+                token->context = malloc(2);
+                if (token->context != NULL) {
+                    token->context[0] = '1';
+                    token->context[1] = '\0';
+                    token->value = 1;
+                }
+                return 1;
+            }
+            length = 2;
+            break;
+        case '/':
+            if (next == '/' || next == '*') {
+                return 0;
+            }
+            break;
+        default:
+            return 0;
+    }
+
+    token->type = TOKEN_OPERATOR;
+    token->value = 0;
+    token->float_value = 0.0;
+    token->length = length;
+    token->context = malloc(length + 1);
+    if (token->context == NULL) {
+        *token = lexer_internal_error();
+        return 1;
+    }
+    memcpy(token->context, lexer.input + start, length);
+    token->context[length] = '\0';
+    lexer.position += length;
+    return 1;
+}
+
+// Kontrola, zda je znak oddelovac
+static int is_separator(Token *token) {
+    size_t start = lexer.position;
+    char first = lexer.input[start];
+
+    switch (first) {
+        case '(':
+        case ')':
+        case ',':
+        case ':':
+        case ';':
+            break;
+        case '.':
+            if (start + 1 < lexer.length) {
+                char next = lexer.input[start + 1];
+                if (next >= '0' && next <= '9') {
+                    return 0;
+                }
+            }
+            break;
+        default:
+            return 0;
+    }
+
+    token->type = TOKEN_SEPARATOR;
+    token->value = 0;
+    token->float_value = 0.0;
+    token->length = 1;
+    token->context = malloc(2);
+    if (token->context == NULL) {
+        *token = lexer_internal_error();
+        return 1;
+    }
+    token->context[0] = first;
+    token->context[1] = '\0';
+    lexer.position++;
+    return 1;
+}
+
+// Kontrola, zda je znak anotace (@main)
+static int is_annotation(Token *token) {
+    static const char annotation[] = "@main";
+    size_t start = lexer.position;
+    if (lexer.input[start] != '@') {
+        return 0;
+    }
+
+    size_t length = strlen(annotation);
+    size_t available = lexer.length - start;
+    int matches = 0;
+    if (available >= length) {
+        if (memcmp(lexer.input + start, annotation, length) == 0) {
+            matches = 1;
+        }
+    }
+    if (matches && available > length) {
+        char next = lexer.input[start + length];
+        if (is_identifier_part(next)) {
+            matches = 0;
+        }
+    }
+
+    if (!matches) {
+        token->type = TOKEN_ERROR;
+        token->value = 99;
+        token->float_value = 0.0;
+        token->length = 0;
+        token->context = malloc(2);
+        if (token->context != NULL) {
+            token->context[0] = '1';
+            token->context[1] = '\0';
+            token->value = 1;
+        }
+        return 1;
+    }
+
+    token->type = TOKEN_ANNOTATION;
+    token->value = 0;
+    token->float_value = 0.0;
+    token->length = length;
+    token->context = malloc(length + 1);
+    if (token->context == NULL) {
+        *token = lexer_internal_error();
+        return 1;
+    }
+    memcpy(token->context, annotation, length + 1);
+    lexer.position += length;
+    return 1;
+}
+
+
+// Jednoradkove komentare (//)
+static int is_line_comment(Token *token) {
+    size_t start = lexer.position;
+    if (lexer.length - start < 2) {
+        return 0;
+    }
+    if (lexer.input[start] != '/' || lexer.input[start + 1] != '/') {
+        return 0;
+    }
+
+    lexer.position += 2;
+    while (lexer.position < lexer.length && lexer.input[lexer.position] != '\n') {
+        lexer.position++;
+    }
+    if (lexer.position < lexer.length) {
+        return 2;
+    }
+
+    token->type = TOKEN_EOL;
+    token->context = NULL;
+    token->value = 0;
+    token->float_value = 0.0;
+    token->length = lexer.position - start;
+    return 1;
+}
+
+// Blokove komentare (/* */)
+static int is_block_comment(Token *token) {
+    size_t start = lexer.position;
+    if (lexer.length - start < 2) {
+        return 0;
+    }
+    if (lexer.input[start] != '/' || lexer.input[start + 1] != '*') {
+        return 0;
+    }
+
+    size_t comment_in = 1;
+    size_t comment_out = 0;
+    int has_newline = 0;
+    lexer.position += 2;
+    while (lexer.position < lexer.length && comment_in != comment_out) {
+        if (lexer.input[lexer.position] == '\n') {
+            has_newline = 1;
+        }
+        if (lexer.length - lexer.position >= 2) {
+            char first = lexer.input[lexer.position];
+            char second = lexer.input[lexer.position + 1];
+            if (first == '/' && second == '*') {
+                comment_in++;
+                lexer.position += 2;
+                continue;
+            }
+            if (first == '*' && second == '/') {
+                comment_out++;
+                lexer.position += 2;
+                continue;
+            }
+        }
+        lexer.position++;
+    }
+
+    if (comment_in != comment_out) {
+        token->type = TOKEN_ERROR;
+        token->context = malloc(2);
+        token->value = 99;
+        token->float_value = 0.0;
+        token->length = 0;
+        if (token->context != NULL) {
+            token->context[0] = '1';
+            token->context[1] = '\0';
+            token->value = 1;
+        }
+        return 1;
+    }
+    if (!has_newline) {
+        return 2;
+    }
+
+    while (lexer.position < lexer.length &&
+           (lexer.input[lexer.position] == ' ' || lexer.input[lexer.position] == '\t' ||
+            lexer.input[lexer.position] == '\r')) {
+        lexer.position++;
+    }
+    if (lexer.position < lexer.length && lexer.input[lexer.position] != '\n') {
+        token->type = TOKEN_ERROR;
+        token->context = malloc(2);
+        token->value = 99;
+        token->float_value = 0.0;
+        token->length = 0;
+        if (token->context != NULL) {
+            token->context[0] = '2';
+            token->context[1] = '\0';
+            token->value = 2;
+        }
+        return 1;
+    }
+    if (lexer.position < lexer.length) {
+        lexer.position++;
+    }
+
+    size_t next = lexer.position;
+    int space_count = 0;
+    while (next < lexer.length && lexer.input[next] == ' ') {
+        if (space_count == INT_MAX) {
+            *token = lexer_internal_error();
+            return 1;
+        }
+        space_count++;
+        next++;
+    }
+    token->type = TOKEN_EOL;
+    token->context = NULL;
+    token->value = space_count;
+    token->float_value = 0.0;
+    token->length = lexer.position - start;
+    return 1;
+}
+
 // Ziskani dalsiho tokenu
 Token lexer_next(void) {
 	// Prazdny vstup
@@ -164,11 +440,28 @@ Token lexer_next(void) {
     }
 
 	// Preskoceni bilych znaku (mezery, tabulatory, carriage return)
-    while (lexer.position < lexer.length &&
-           (lexer.input[lexer.position] == ' ' ||
-            lexer.input[lexer.position] == '\t' ||
-            lexer.input[lexer.position] == '\r')) {
-        lexer.position++;
+    Token comment;
+    while (lexer.position < lexer.length) {
+        char character = lexer.input[lexer.position];
+        if (character == ' ' || character == '\t' || character == '\r') {
+            lexer.position++;
+            continue;
+        }
+        int result = is_line_comment(&comment);
+        if (result == 1) {
+            return comment;
+        }
+        if (result == 2) {
+            continue;
+        }
+        result = is_block_comment(&comment);
+        if (result == 1) {
+            return comment;
+        }
+        if (result == 2) {
+            continue;
+        }
+        break;
     }
 
 	// Konec vstupu
@@ -210,11 +503,28 @@ Token lexer_next(void) {
         return read_identifier_or_keyword();
     }
 
+	// Zpracovani operatoru, oddelovacu a anotace
+    Token token;
+    if (is_operator(&token)) {
+        return token;
+    }
+    if (is_separator(&token)) {
+        return token;
+    }
+    if (is_annotation(&token)) {
+        return token;
+    }
+
     if (lexer.input[lexer.position] == '`') {
-        Token error = {.type = TOKEN_ERROR, .value = 99};
-        error.context = malloc(sizeof "1");
+        Token error;
+        error.type = TOKEN_ERROR;
+        error.value = 99;
+        error.float_value = 0.0;
+        error.length = 0;
+        error.context = malloc(2);
         if (error.context != NULL) {
-            memcpy(error.context, "1", sizeof "1");
+            error.context[0] = '1';
+            error.context[1] = '\0';
             error.value = 1;
         }
         return error;
@@ -225,9 +535,8 @@ Token lexer_next(void) {
 
 // Ziskani dalsiho tokenu bez posunu pozice
 Token lexer_peek(void) {
+    size_t position = lexer.position;
     Token token = lexer_next();
-    if (token.type != TOKEN_ERROR) {
-        lexer.position -= token.length;
-    }
+    lexer.position = position;
     return token;
 }

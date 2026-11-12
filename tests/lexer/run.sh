@@ -29,11 +29,11 @@ printf '%33s' '' | "$test_binary" lx02-init-grow-again
 printf 'LX-02: chyba cteni vstupu\n'
 "$test_binary" lx02-init-read </
 printf 'LX-02: chyba pri nahledu\n'
-printf '+' | "$test_binary" lx02-peek-error
+printf '!' | "$test_binary" lx02-peek-error
 printf 'LX-02: chyba alokace textu chyby pri nahledu\n'
-printf '+' | "$test_binary" lx02-peek-no-memory
+printf '!' | "$test_binary" lx02-peek-no-memory
 printf 'LX-02: dosud nepodporovany znak\n'
-printf '+' | "$test_binary" lx02-unimplemented
+printf '\000' | "$test_binary" lx02-unimplemented
 printf 'LX-02: vsechny testy prosly\n'
 printf 'LX-03: identifikatory, klicova slova, nahled a hranice tokenu\n'
 printf ' val2\n_x x_2 main Val int val Int if while def do Double else import return String then Unit var' | "$test_binary" lx03-identifiers
@@ -42,3 +42,30 @@ printf '_' | "$test_binary" lx03-underscore
 printf 'LX-03: obraceny apostrof je lexikalni chyba\n'
 printf '%s' '`foo`' | "$test_binary" lx03-backtick
 printf '%s' '`' | "$test_binary" lx03-backtick
+printf 'LX-04: operatory, oddelovace, anotace a nahled\n'
+printf '%s' 'a<=b<c=d==e > >= != + - * / import ifj26.* @main def main():Unit,;@main' |
+    "$test_binary" lx04-symbols
+printf 'LX-04: neplatny vykricnik a neplatne anotace\n'
+for input in '!' '!x' '@' '@m' '@ma' '@mai' '@ main' '@Main' '@mainx' '@main0' '@main_'; do
+    printf '%s' "$input" | "$test_binary" lx04-invalid-symbol
+done
+printf 'LX-04: zacatek desetinneho literalu\n'
+printf '%s' '.5' | "$test_binary" lx04-deferred-token
+printf 'LX-04: chyba alokace textu tokenu\n'
+for input in '==' '(' '@main'; do
+    printf '%s' "$input" | "$test_binary" lx04-token-no-memory
+done
+printf 'LX-09: radkovy komentar, nahled a dalsi radek\n'
+printf 'a// /* */\n  b' | "$test_binary" lx09-line
+printf 'LX-09: odsazeni po samostatnem komentari\n'
+printf 'a\n  // poznamka\n    b' | "$test_binary" lx09-comment-line
+printf 'LX-09: radkovy komentar u konce souboru\n'
+printf '// konec' | "$test_binary" lx09-eof
+printf 'LX-10: blokovy komentar a vnoreny komentar\n'
+printf 'a/* jedna /* dva */ tri */b' | "$test_binary" lx10-nested
+printf 'LX-10: neukonceny vnoreny komentar\n'
+printf '/* jedna /* dva */' | "$test_binary" lx10-unclosed
+printf 'LX-11: vice radku a token za komentarem\n'
+printf '/*\n*/x' | "$test_binary" lx11-trailing
+printf 'LX-12: vice radku v komentari a nasledujici odsazeni\n'
+printf '/*\ntext\n*/  \n  b' | "$test_binary" lx12-block-eol

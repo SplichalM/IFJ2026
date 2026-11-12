@@ -13,7 +13,8 @@ typedef enum {
     TOKEN_SEPARATOR,
     TOKEN_EOL,
     TOKEN_EOF,
-    TOKEN_ERROR
+    TOKEN_ERROR,
+    TOKEN_ANNOTATION
 } TokenType;
 
 typedef struct {
