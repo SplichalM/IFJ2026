@@ -3,17 +3,25 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+static void dispose_node(symtable_node_t* node);
+static symtable_node_t* new_node(const char* key, sym_type_t type);
+static symtable_node_t* left_rotate(symtable_node_t* x);
+static symtable_node_t* right_rotate(symtable_node_t* y);
+static int get_height(symtable_node_t* node);
+static int max(int a, int b);
+static symtable_node_t* insert_rec(symtable_node_t* root, const char* key, sym_type_t type, sym_data_t** out);
+static sym_data_t* search_rec(symtable_node_t* root, const char* key);
 
-int max(int a, int b) {
+static int max(int a, int b) {
 	return a > b ? a : b;
 }
 
-int get_height(symtable_node_t* node) {
+static int get_height(symtable_node_t* node) {
 	if (node == NULL) return 0;
 	return node->height;
 }
 
-symtable_node_t* right_rotate(symtable_node_t* y) {
+static symtable_node_t* right_rotate(symtable_node_t* y) {
 	symtable_node_t* x = y->left;
 	symtable_node_t* T2 = x->right;
 
@@ -26,7 +34,7 @@ symtable_node_t* right_rotate(symtable_node_t* y) {
 	return x;
 }
 
-symtable_node_t* left_rotate(symtable_node_t* x) {
+static symtable_node_t* left_rotate(symtable_node_t* x) {
 	symtable_node_t* y = x->right;
 	symtable_node_t* T2 = y->left;
 
@@ -39,7 +47,7 @@ symtable_node_t* left_rotate(symtable_node_t* x) {
 	return y;
 }
 
-symtable_node_t* new_node(const char* key, sym_type_t type) {
+static symtable_node_t* new_node(const char* key, sym_type_t type) {
 	symtable_node_t* node = calloc(1, sizeof(symtable_node_t));
 	if (node == NULL) {
 		exit(99);
@@ -58,7 +66,7 @@ symtable_node_t* new_node(const char* key, sym_type_t type) {
 	return node;
 }
 
-symtable_node_t* insert_rec(symtable_node_t* root, const char* key, sym_type_t type, sym_data_t** out) {
+static symtable_node_t* insert_rec(symtable_node_t* root, const char* key, sym_type_t type, sym_data_t** out) {
 	if (root == NULL) {
 		symtable_node_t* node = new_node(key, type);
 		*out = &node->data;
@@ -111,7 +119,7 @@ sym_data_t* symtable_insert(symtable_t* symtable, const char* key, sym_type_t ty
 	return result;
 }
 
-sym_data_t* search_rec(symtable_node_t* root, const char* key) {
+static sym_data_t* search_rec(symtable_node_t* root, const char* key) {
     if (root == NULL) return NULL;
 
     int cmp = strcmp(key, root->key);
@@ -147,7 +155,7 @@ void symtable_print(symtable_t* symtable) {
     symtable_print_rec(symtable->root);
 }
 */
-void dispose_node(symtable_node_t  *node){
+static void dispose_node(symtable_node_t  *node){
     if (node == NULL) return;
     dispose_node (node->left);
     dispose_node (node->right);
