@@ -265,5 +265,367 @@ DataType sem_call(sem_context_t* context, ASTNode* node) {
 		sem_ensure_function_analyzed(context->functions, func);
 	}
 
+void sem_insert_conversion(ASTNode** subnode_ptr) {
+	if (subnode_ptr == NULL || *subnode_ptr == NULL) return;
+
+	ASTNode* orig = *subnode_ptr;
+
+
+	ASTNode* conv = calloc(1, sizeof(ASTNode));
+	if (conv == NULL) {
+		sem_error(99, "Error allocating memory for conversion node");
+	}
+	conv->type = NODE_INT2DOUBLE;
+	conv->data_type = TYPE_DOUBLE;
+	conv->as.op.left = orig;
+	conv->as.op.right = NULL;
+	conv->as.op.op = NULL;
+
+	conv->next = orig->next;
+	orig->next = NULL;
+
+	*subnode_ptr = conv;
+}
+
+bool sem_types_compatible(DataType target, DataType source) {
+
+	if (source == TYPE_BOOL || target == TYPE_BOOL) {
+		return false;
+	}
+	if (target == TYPE_ANY) {
+		return true;
+	}
+	if (target == source) {
+		return true;
+	}
+	if (target == TYPE_DOUBLE && source == TYPE_INT) {
+		return true;
+	}
+	return false;
+}
+
+void sem_check_assignable(sem_context_t* context, DataType target, ASTNode** expr_ptr) {
+	(void)context;
+	DataType source = (*expr_ptr)->data_type;
+
+	if (!sem_types_compatible(target, source)) {
+		sem_error(6, "Incompatible types in assignment or return");
+	}
+	if (target == TYPE_DOUBLE && source == TYPE_INT) {
+		sem_insert_conversion(expr_ptr);
+	}
+}
+
+DataType sem_expr_type(sem_context_t* context, ASTNode* node) {
+	if (node == NULL) {
+		sem_error(99, "NULL expression node");
+	}
+
+	DataType result_type = TYPE_UNKNOWN;
+
+	switch (node->type) {
+	case NODE_LITERAL:
+		switch (node->as.literal.type) {
+		case LIT_INT:    result_type = TYPE_INT; break;
+		case LIT_DOUBLE: result_type = TYPE_DOUBLE; break;
+		case LIT_STRING: result_type = TYPE_STRING; break;
+		case LIT_UNIT:   result_type = TYPE_UNIT; break;
+		default:         sem_error(99, "Unknown literal type");
+		}
+		break;
+
+	case NODE_IDENTIFIER:
+		result_type = sem_identifier(context, node);
+		break;
+
+	case NODE_BINARY_OP:
+		result_type = sem_binary_op(context, node);
+		break;
+
+	case NODE_UNARY_OP:
+		result_type = sem_unary_op(context, node);
+		break;
+
+	case NODE_FUNC_CALL:
+		result_type = sem_call(context, node);
+		break;
+
+	case NODE_INT2DOUBLE:
+		result_type = TYPE_DOUBLE;
+		break;
+
+	default:
+		sem_error(99, "Invalid AST node in expression");
+	}
+
+	node->data_type = result_type;
+	return result_type;
+}
+
+DataType sem_unary_op(sem_context_t* context, ASTNode* node) {
+	DataType operand_type = sem_expr_type(context, node->as.op.left);
+	const char* op = node->as.op.op;
+
+	if (strcmp(op, "-") == 0 || strcmp(op, "+") == 0) {
+		if (operand_type != TYPE_INT && operand_type != TYPE_DOUBLE) {
+			sem_error(6, "Unary + or - requires numeric operand");
+		}
+		node->data_type = operand_type;
+		return operand_type;
+	}
+
+	sem_error(6, "Unsupported unary operator");
+	return TYPE_UNKNOWN;
+}
+
+DataType sem_binary_op(sem_context_t* context, ASTNode* node) {
+	DataType left_t = sem_expr_type(context, node->as.op.left);
+	DataType right_t = sem_expr_type(context, node->as.op.right);
+	const char* op = node->as.op.op;
+
+	if (left_t == TYPE_BOOL || right_t == TYPE_BOOL) {
+		sem_error(6, "Boolean expression cannot be used as operand in basic specification");
+	}
+
+	bool left_is_num = (left_t == TYPE_INT || left_t == TYPE_DOUBLE);
+	bool right_is_num = (right_t == TYPE_INT || right_t == TYPE_DOUBLE);
+	bool both_num = left_is_num && right_is_num;
+
+
+	if (strcmp(op, "+") == 0) {
+		if (left_t == TYPE_STRING && right_t == TYPE_STRING) {
+			node->data_type = TYPE_STRING;
+			return TYPE_STRING;
+		}
+		if (both_num) {
+			if (left_t == TYPE_INT && right_t == TYPE_DOUBLE) {
+				sem_insert_conversion(&node->as.op.left);
+				node->data_type = TYPE_DOUBLE;
+				return TYPE_DOUBLE;
+			}
+			if (left_t == TYPE_DOUBLE && right_t == TYPE_INT) {
+				sem_insert_conversion(&node->as.op.right);
+				node->data_type = TYPE_DOUBLE;
+				return TYPE_DOUBLE;
+			}
+			node->data_type = left_t;
+			return left_t;
+		}
+		sem_error(6, "Type mismatch for operator '+'");
+	}
+
+
+	if (strcmp(op, "-") == 0 || strcmp(op, "*") == 0 || strcmp(op, "/") == 0) {
+		if (!both_num) {
+			sem_error(6, "Arithmetic operators '-', '*', '/' require numeric operands");
+		}
+		if (left_t == TYPE_INT && right_t == TYPE_DOUBLE) {
+			sem_insert_conversion(&node->as.op.left);
+			node->data_type = TYPE_DOUBLE;
+			return TYPE_DOUBLE;
+		}
+		if (left_t == TYPE_DOUBLE && right_t == TYPE_INT) {
+			sem_insert_conversion(&node->as.op.right);
+			node->data_type = TYPE_DOUBLE;
+			return TYPE_DOUBLE;
+		}
+		node->data_type = left_t; 
+		return left_t;
+	}
+
+
+	if (strcmp(op, "<") == 0 || strcmp(op, "<=") == 0 ||
+	    strcmp(op, ">") == 0 || strcmp(op, ">=") == 0) {
+		if (left_t == TYPE_STRING && right_t == TYPE_STRING) {
+			node->data_type = TYPE_BOOL;
+			return TYPE_BOOL;
+		}
+		if (both_num) {
+			if (left_t == TYPE_INT && right_t == TYPE_DOUBLE) {
+				sem_insert_conversion(&node->as.op.left);
+			} else if (left_t == TYPE_DOUBLE && right_t == TYPE_INT) {
+				sem_insert_conversion(&node->as.op.right);
+			}
+			node->data_type = TYPE_BOOL;
+			return TYPE_BOOL;
+		}
+		sem_error(6, "Relational operators require two numbers or two strings");
+	}
+
+
+	if (strcmp(op, "==") == 0 || strcmp(op, "!=") == 0) {
+		if (both_num) {
+			if (left_t == TYPE_INT && right_t == TYPE_DOUBLE) {
+				sem_insert_conversion(&node->as.op.left);
+			} else if (left_t == TYPE_DOUBLE && right_t == TYPE_INT) {
+				sem_insert_conversion(&node->as.op.right);
+			}
+			node->data_type = TYPE_BOOL;
+			return TYPE_BOOL;
+		}
+		if (left_t == right_t) {
+			node->data_type = TYPE_BOOL;
+			return TYPE_BOOL;
+		}
+		sem_error(6, "Equality operators require compatible types");
+	}
+
+	sem_error(6, "Unknown binary operator");
+	return TYPE_UNKNOWN;
+}
+
+void sem_check_condition(sem_context_t* context, ASTNode* cond) {
+	DataType cond_type = sem_expr_type(context, cond);
+	if (cond_type != TYPE_BOOL) {
+		sem_error(6, "Condition in if/while must be a relational expression of type Boolean");
+	}
+}
+
+void sem_return(sem_context_t* context, ASTNode* node) {
+	if (context->curr_func == NULL) {
+		sem_error(99, "Return statement outside of function context");
+	}
+
+	if (!context->curr_func->as.func.expl_return_type) {
+		sem_error(6, "Function containing 'return' must have an explicit return type");
+	}
+
+	DataType expected_ret = context->curr_func->as.func.return_type;
+
+	if (node->as.ret_stmt.expr == NULL) {
+
+		if (expected_ret != TYPE_UNIT) {
+			sem_error(6, "Empty return is only allowed in a function with explicit Unit return type");
+		}
+	} else {
+
+		DataType expr_t = sem_expr_type(context, node->as.ret_stmt.expr);
+		if (expr_t == TYPE_BOOL) {
+			sem_error(6, "Cannot return a Boolean expression in basic specification");
+		}
+
+		if (expected_ret != TYPE_UNIT) {
+			sem_check_assignable(context, expected_ret, &node->as.ret_stmt.expr);
+		}
+	}
+}
+
+DataType sem_block_result(sem_context_t* context, ASTNode* block) {
+	if (block == NULL) {
+		return TYPE_UNIT;
+	}
+
+
+	ASTNode* tail = (block->type == NODE_BLOCK) ? block->as.list.tail : block;
+	if (tail == NULL) {
+		return TYPE_UNIT;
+	}
+
+	switch (tail->type) {
+	case NODE_VAR_DECL:
+	case NODE_ASSIGN:
+	case NODE_WHILE:
+		return TYPE_UNIT;
+
+	case NODE_RETURN:
+		return SEM_BLOCK_RETURNS;
+
+	case NODE_IF: {
+		DataType then_res = sem_block_result(context, tail->as.if_stmt.then_block);
+		DataType else_res = (tail->as.if_stmt.else_block != NULL)
+			? sem_block_result(context, tail->as.if_stmt.else_block)
+			: TYPE_UNIT;
+
+
+		if (context->curr_func->as.func.expl_return_type &&
+		    context->curr_func->as.func.return_type == TYPE_UNIT) {
+			return TYPE_UNIT;
+		}
+
+		if (then_res == SEM_BLOCK_RETURNS && else_res == SEM_BLOCK_RETURNS) {
+			return SEM_BLOCK_RETURNS;
+		}
+
+		if (!context->curr_func->as.func.expl_return_type &&
+		    then_res == TYPE_UNIT && else_res == TYPE_UNIT) {
+			return TYPE_UNIT;
+		}
+
+		sem_error(6, "Invalid 'if' statement at the end of function body");
+		return TYPE_UNKNOWN;
+	}
+
+	default:
+
+		return tail->data_type;
+	}
+}
+
+
+static void convert_block_tail_to_double(ASTNode** body_ptr) {
+	if (body_ptr == NULL || *body_ptr == NULL) return;
+
+	ASTNode* body = *body_ptr;
+	if (body->type != NODE_BLOCK) {
+		sem_insert_conversion(body_ptr);
+		return;
+	}
+
+	if (body->as.list.head == NULL) return;
+
+	ASTNode** curr_ptr = &body->as.list.head;
+	while ((*curr_ptr)->next != NULL) {
+		curr_ptr = &((*curr_ptr)->next);
+	}
+	sem_insert_conversion(curr_ptr);
+	body->as.list.tail = *curr_ptr;
+}
+
+void sem_check_function_result(sem_context_t* context, sym_data_t* func) {
+	ASTNode* body = func->as.func.definition->as.func_def.body;
+	DataType body_res = sem_block_result(context, body);
+
+	if (body_res == TYPE_BOOL) {
+		sem_error(6, "Function cannot return Boolean in basic specification");
+	}
+
+	if (func->as.func.expl_return_type) {
+
+		if (func->as.func.return_type == TYPE_UNIT) {
+			return;
+		}
+
+		if (body_res == SEM_BLOCK_RETURNS) {
+			return;
+		}
+
+		if (!sem_types_compatible(func->as.func.return_type, body_res)) {
+			sem_error(6, "Function body result does not match explicit return type");
+		}
+
+		if (func->as.func.return_type == TYPE_DOUBLE && body_res == TYPE_INT) {
+			convert_block_tail_to_double(&func->as.func.definition->as.func_def.body);
+		}
+	} else {
+
+		func->as.func.return_type = body_res;
+		func->as.func.definition->as.func_def.return_type = body_res;
+	}
+}
+
+void sem_ensure_function_analyzed(symtable_t* functions, sym_data_t* func) {
+	if (func == NULL) return;
+
+	if (func->as.func.state == FUNC_DONE) {
+		return;
+	}
+	if (func->as.func.state == FUNC_IN_PROGRESS) {
+		sem_error(6, "Recursive function without explicit return type");
+	}
+
 	return func->as.func.return_type;
+	func->as.func.state = FUNC_IN_PROGRESS;
+	sem_analyze_function(functions, func->as.func.definition);
+	func->as.func.state = FUNC_DONE;
+    printf("%d", a);
 }
