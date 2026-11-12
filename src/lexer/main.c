@@ -343,6 +343,123 @@ static int is_float(Token *token) {
     return 1;
 }
 
+// Kontrola zda je viceradkovy retezec ("""...""")
+static int is_multiline_string(Token *token) {
+    size_t start = lexer.position;
+    if (lexer.length - start < 3 || memcmp(lexer.input + start, "\"\"\"", 3) != 0) {
+        return 0;
+    }
+
+    size_t content_start = start + 3;
+    size_t end = content_start;
+    int closed = 0;
+    while (end < lexer.length && lexer.input[end] != '\0') {
+        if (lexer.length - end >= 3 && memcmp(lexer.input + end, "\"\"\"", 3) == 0) {
+            end += 3;
+            while (end < lexer.length && lexer.input[end] == '"') {
+                end++;
+            }
+            closed = 1;
+            break;
+        }
+        end++;
+    }
+
+    token->float_value = 0.0;
+    if (!closed) {
+        token->type = TOKEN_ERROR;
+        token->length = 0;
+        token->context = malloc(2);
+        if (token->context == NULL) {
+            token->value = 99;
+        } else {
+            memcpy(token->context, "1", 2);
+            token->value = 1;
+        }
+        return 1;
+    }
+
+    size_t length = end - content_start - 3;
+    token->context = malloc(length + 1);
+    if (token->context == NULL) {
+        *token = lexer_internal_error();
+        return 1;
+    }
+
+    memcpy(token->context, lexer.input + content_start, length);
+    token->context[length] = '\0';
+    token->type = TOKEN_STRING;
+    token->value = 0;
+    token->length = end - start;
+    lexer.position = end;
+    return 1;
+}
+
+// Kontrola, zda jejednoradkovy retezec ("...")
+static int is_line_string(Token *token) {
+    size_t start = lexer.position;
+    if (lexer.input[start] != '"') {
+        return 0;
+    }
+    const char escapes[] = "\\\"nrt";
+    const char decoded[] = "\\\"\n\r\t";
+    size_t end = start + 1;
+    size_t length = 0;
+    while (end < lexer.length && lexer.input[end] != '"') {
+        char character = lexer.input[end];
+        if (character == '\n' || character == '\0') {
+            break;
+        }
+        if (character == '\\') {
+            end++;
+            if (end == lexer.length ||
+                memchr(escapes, lexer.input[end], sizeof escapes - 1) == NULL) {
+                break;
+            }
+        }
+        end++;
+        length++;
+    }
+
+    token->float_value = 0.0;
+    if (end == lexer.length || lexer.input[end] != '"') {
+        token->type = TOKEN_ERROR;
+        token->length = 0;
+        token->context = malloc(2);
+        if (token->context == NULL) {
+            token->value = 99;
+        } else {
+            memcpy(token->context, "1", 2);
+            token->value = 1;
+        }
+        return 1;
+    }
+
+    token->context = malloc(length + 1);
+    if (token->context == NULL) {
+        *token = lexer_internal_error();
+        return 1;
+    }
+
+    size_t position = start + 1;
+    for (size_t i = 0; i < length; i++) {
+        char character = lexer.input[position];
+        if (character == '\\') {
+            position++;
+            const char *escape = memchr(escapes, lexer.input[position], sizeof escapes - 1);
+            character = decoded[escape - escapes];
+        }
+        token->context[i] = character;
+        position++;
+    }
+    token->context[length] = '\0';
+    token->type = TOKEN_STRING;
+    token->value = 0;
+    token->length = end - start + 1;
+    lexer.position = end + 1;
+    return 1;
+}
+
 // Kontrola, zda je znak operatorem
 static int is_operator(Token *token) {
     size_t start = lexer.position;
@@ -691,6 +808,12 @@ Token lexer_next(void) {
         return token;
     }
     if (is_float(&token)) {
+        return token;
+    }
+    if (is_multiline_string(&token)) {
+        return token;
+    }
+    if (is_line_string(&token)) {
         return token;
     }
     if (is_operator(&token)) {

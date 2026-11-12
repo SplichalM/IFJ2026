@@ -65,6 +65,24 @@ printf '%s' '.5 1.25e+2D 1e3' | "$test_binary" lx06-float
 for input in '12.' '1e' '1e+' '1.2e-'; do
     printf '%s' "$input" | "$test_binary" lx06-invalid
 done
+printf 'LX-07: prazdny retezec, escape sekvence, nahled a hranice tokenu\n'
+printf '%s' '"" "a\\\"\n\r\t")' | "$test_binary" lx07-strings
+printf 'LX-07: neplatna escape sekvence, LF a neukonceny retezec\n'
+for input in '"\q"' '"abc' '"abc\'; do
+    printf '%s' "$input" | "$test_binary" lx07-invalid
+done
+printf '"a\nb"' | "$test_binary" lx07-invalid
+printf 'LX-07: chyba alokace obsahu retezce\n'
+printf '%s' '"abc"' | "$test_binary" lx07-token-no-memory
+printf 'LX-08: prazdny a viceradkovy retezec, doslovny obsah a nahled\n'
+printf '%s\n%s\n' '"""""" """A' '  B\n ""x""""' | "$test_binary" lx08-strings
+printf 'LX-08: neukonceny viceradkovy retezec\n'
+for input in '"""' '"""a"' '"""a""'; do
+    printf '%s' "$input" | "$test_binary" lx08-invalid
+done
+printf '"""a\nb' | "$test_binary" lx08-invalid
+printf 'LX-08: chyba alokace obsahu retezce\n'
+printf '%s' '"""abc"""' | "$test_binary" lx08-token-no-memory
 printf 'LX-09: radkovy komentar, nahled a dalsi radek\n'
 printf 'a// /* */\n  b' | "$test_binary" lx09-line
 printf 'LX-09: odsazeni po samostatnem komentari\n'

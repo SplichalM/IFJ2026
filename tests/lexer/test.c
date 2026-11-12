@@ -197,7 +197,72 @@ int main(int argc, char **argv) {
         assert_eof(lexer_next());
         lexer_free();
         assert(live_allocations == 0);
-    } else if (strcmp(argv[1], "lx05-invalid") == 0 || strcmp(argv[1], "lx06-invalid") == 0) {
+    } else if (strcmp(argv[1], "lx07-strings") == 0) {
+        assert(lexer_init() == 0);
+        Token empty = lexer_next();
+        assert(empty.type == TOKEN_STRING);
+        assert(empty.length == 2);
+        assert(empty.context != NULL);
+        assert(empty.context[0] == '\0');
+        free(empty.context);
+
+        Token peek = lexer_peek();
+        Token token = lexer_next();
+        assert(peek.type == TOKEN_STRING);
+        assert(token.type == TOKEN_STRING);
+        assert(token.length == 13);
+        assert(peek.length == token.length);
+        assert(token.context != NULL);
+        assert(peek.context != NULL);
+        assert(peek.context != token.context);
+        assert(strcmp(token.context, "a\\\"\n\r\t") == 0);
+        assert(strcmp(peek.context, token.context) == 0);
+        assert(token.value == 0);
+        assert(token.float_value == 0.0);
+        free(peek.context);
+        free(token.context);
+
+        Token separator = lexer_next();
+        assert(separator.type == TOKEN_SEPARATOR);
+        assert(separator.context != NULL);
+        assert(strcmp(separator.context, ")") == 0);
+        free(separator.context);
+        assert_eof(lexer_next());
+        lexer_free();
+        assert(live_allocations == 0);
+    } else if (strcmp(argv[1], "lx08-strings") == 0) {
+        assert(lexer_init() == 0);
+        Token empty = lexer_next();
+        assert(empty.type == TOKEN_STRING);
+        assert(empty.length == 6);
+        assert(empty.context != NULL);
+        assert(empty.context[0] == '\0');
+        free(empty.context);
+
+        Token peek = lexer_peek();
+        Token token = lexer_next();
+        assert(peek.type == TOKEN_STRING);
+        assert(token.type == TOKEN_STRING);
+        assert(token.length == 18);
+        assert(peek.length == token.length);
+        assert(token.context != NULL);
+        assert(peek.context != NULL);
+        assert(peek.context != token.context);
+        assert(strcmp(token.context, "A\n  B\\n \"\"x\"") == 0);
+        assert(strcmp(peek.context, token.context) == 0);
+        assert(token.value == 0);
+        assert(token.float_value == 0.0);
+        free(peek.context);
+        free(token.context);
+
+        Token eol = lexer_next();
+        assert(eol.type == TOKEN_EOL);
+        assert(eol.length == 1);
+        assert_eof(lexer_next());
+        lexer_free();
+        assert(live_allocations == 0);
+    } else if (strcmp(argv[1], "lx05-invalid") == 0 || strcmp(argv[1], "lx06-invalid") == 0 ||
+               strcmp(argv[1], "lx07-invalid") == 0 || strcmp(argv[1], "lx08-invalid") == 0) {
         assert(lexer_init() == 0);
         Token token = lexer_next();
         assert(token.type == TOKEN_ERROR);
@@ -414,7 +479,9 @@ int main(int argc, char **argv) {
         assert_eof(lexer_next());
         lexer_free();
         assert(live_allocations == 0);
-    } else if (strcmp(argv[1], "lx04-token-no-memory") == 0) {
+    } else if (strcmp(argv[1], "lx04-token-no-memory") == 0 ||
+               strcmp(argv[1], "lx07-token-no-memory") == 0 ||
+               strcmp(argv[1], "lx08-token-no-memory") == 0) {
         int result = lexer_init();
         assert(result == 0);
         fail_first = 2;
