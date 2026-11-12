@@ -29,9 +29,16 @@ printf '%33s' '' | "$test_binary" lx02-init-grow-again
 printf 'LX-02: chyba cteni vstupu\n'
 "$test_binary" lx02-init-read </
 printf 'LX-02: chyba pri nahledu\n'
-printf 'a' | "$test_binary" lx02-peek-error
+printf '+' | "$test_binary" lx02-peek-error
 printf 'LX-02: chyba alokace textu chyby pri nahledu\n'
-printf 'a' | "$test_binary" lx02-peek-no-memory
+printf '+' | "$test_binary" lx02-peek-no-memory
 printf 'LX-02: dosud nepodporovany znak\n'
-printf 'a' | "$test_binary" lx02-unimplemented
+printf '+' | "$test_binary" lx02-unimplemented
 printf 'LX-02: vsechny testy prosly\n'
+printf 'LX-03: identifikatory, klicova slova, nahled a hranice tokenu\n'
+printf ' val2\n_x x_2 main Val int val Int if while def do Double else import return String then Unit var' | "$test_binary" lx03-identifiers
+printf 'LX-03: samotne podtrzitko je lexikalni chyba\n'
+printf '_' | "$test_binary" lx03-underscore
+printf 'LX-03: obraceny apostrof je lexikalni chyba\n'
+printf '%s' '`foo`' | "$test_binary" lx03-backtick
+printf '%s' '`' | "$test_binary" lx03-backtick

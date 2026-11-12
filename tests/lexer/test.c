@@ -106,6 +106,51 @@ static void test_lx02_unimplemented_character(void) {
     assert(live_allocations == 0);
 }
 
+static void assert_lx03_identifier(Token token, const char *name) {
+    assert(token.type == TOKEN_IDENTIFIER);
+    assert(token.length == strlen(name));
+    assert(token.context != NULL && strcmp(token.context, name) == 0);
+}
+
+static void test_lx03_identifiers(void) {
+    assert(lexer_init() == 0);
+    Token first = lexer_peek();
+    Token second = lexer_peek();
+    Token read = lexer_next();
+    assert_lx03_identifier(first, "val2");
+    assert_lx03_identifier(second, "val2");
+    assert_lx03_identifier(read, "val2");
+    assert(first.context != second.context && first.context != read.context &&
+           second.context != read.context);
+    free(first.context);
+    free(second.context);
+    free(read.context);
+
+    assert(lexer_next().type == TOKEN_EOL);
+    const char *names[] = {"_x", "x_2", "main", "Val", "int"};
+    for (size_t i = 0; i < sizeof names / sizeof names[0]; i++) {
+        Token token = lexer_next();
+        assert_lx03_identifier(token, names[i]);
+        free(token.context);
+    }
+
+    const char *keywords[] = {
+        "val", "Int", "if", "while", "def", "do", "Double", "else",
+        "import", "return", "String", "then", "Unit", "var"
+    };
+    for (size_t i = 0; i < sizeof keywords / sizeof keywords[0]; i++) {
+        Token token = lexer_next();
+        assert(token.type == TOKEN_KEYWORD);
+        assert(token.length == strlen(keywords[i]));
+        assert(token.context != NULL && strcmp(token.context, keywords[i]) == 0);
+        free(token.context);
+    }
+
+    assert_eof(lexer_next());
+    lexer_free();
+    assert(live_allocations == 0);
+}
+
 int main(int argc, char **argv) {
     assert(argc == 2);
     if (strcmp(argv[1], "lx02-eof") == 0) {
@@ -126,6 +171,17 @@ int main(int argc, char **argv) {
         test_lx02_peek_error(1);
     } else if (strcmp(argv[1], "lx02-unimplemented") == 0) {
         test_lx02_unimplemented_character();
+    } else if (strcmp(argv[1], "lx03-identifiers") == 0) {
+        test_lx03_identifiers();
+    } else if (strcmp(argv[1], "lx03-underscore") == 0 ||
+               strcmp(argv[1], "lx03-backtick") == 0) {
+        assert(lexer_init() == 0);
+        Token error = lexer_next();
+        assert(error.type == TOKEN_ERROR && error.value == 1);
+        assert(error.context != NULL && strcmp(error.context, "1") == 0);
+        free(error.context);
+        lexer_free();
+        assert(live_allocations == 0);
     } else {
         return 2;
     }

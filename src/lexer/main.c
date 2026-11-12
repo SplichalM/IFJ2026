@@ -87,6 +87,75 @@ static Token lexer_internal_error(void) {
     return token;
 }
 
+// Kontrola, zda znak muze byt zacatkem identifikatoru
+static int is_identifier_start(char character) {
+    return (character >= 'A' && character <= 'Z') ||
+           (character >= 'a' && character <= 'z') || character == '_';
+}
+
+// Kontrola, zda znak muze byt soucasti identifikatoru, ale ne zacatkem
+static int is_identifier_part(char character) {
+    return is_identifier_start(character) || (character >= '0' && character <= '9');
+}
+
+// Kontrola, zda je kontext klicovym slovem
+static int is_keyword(const char *context) {
+    static const char *const keywords[] = {
+        "def", "do", "Double", "else", "if", "import", "Int", "return",
+        "String", "then", "Unit", "val", "var", "while"
+    };
+    for (size_t i = 0; i < sizeof keywords / sizeof keywords[0]; i++) {
+        if (strcmp(context, keywords[i]) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// Nacteni identifikatoru nebo klicoveho slova
+static Token read_identifier_or_keyword(void) {
+	// Pocitani delky identifikatoru/klicoveho slova
+    size_t start = lexer.position;
+    size_t end = start + 1;
+    while (end < lexer.length && is_identifier_part(lexer.input[end])) {
+        end++;
+    }
+
+	// Pocitani delky tokenu a kontrola preteceni
+    size_t length = end - start;
+    if (length == SIZE_MAX) {
+        return lexer_internal_error();
+    }
+
+    if (length == 1 && lexer.input[start] == '_') {
+        Token error = {.type = TOKEN_ERROR, .value = 99};
+        error.context = malloc(sizeof "1");
+        if (error.context != NULL) {
+            memcpy(error.context, "1", sizeof "1");
+            error.value = 1;
+        }
+        return error;
+    }
+
+	// Vytvoreni tokenu
+    Token token = {0};
+    token.context = malloc(length + 1);
+    if (token.context == NULL) {
+        return lexer_internal_error();
+    }
+
+    memcpy(token.context, lexer.input + start, length);
+    token.context[length] = '\0';
+    if (is_keyword(token.context)) {
+        token.type = TOKEN_KEYWORD;
+    } else {
+        token.type = TOKEN_IDENTIFIER;
+    }
+    token.length = length;
+    lexer.position = end;
+    return token;
+}
+
 // Ziskani dalsiho tokenu
 Token lexer_next(void) {
 	// Prazdny vstup
@@ -134,6 +203,21 @@ Token lexer_next(void) {
         token.value = (int)space_count;
         lexer.position++;
         return token;
+    }
+
+	// Zpracovani identifikatoru nebo klicoveho slova
+    if (is_identifier_start(lexer.input[lexer.position])) {
+        return read_identifier_or_keyword();
+    }
+
+    if (lexer.input[lexer.position] == '`') {
+        Token error = {.type = TOKEN_ERROR, .value = 99};
+        error.context = malloc(sizeof "1");
+        if (error.context != NULL) {
+            memcpy(error.context, "1", sizeof "1");
+            error.value = 1;
+        }
+        return error;
     }
 
     return lexer_internal_error();
