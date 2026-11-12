@@ -1,6 +1,7 @@
 #include "lexer.h"
 
 #include <limits.h>
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -159,6 +160,187 @@ static Token read_identifier_or_keyword(void) {
     token.length = length;
     lexer.position = end;
     return token;
+}
+
+// Kontrola, zda je kontext celym cislem
+static int is_integer(Token *token) {
+    size_t start = lexer.position;
+    size_t end = start;
+    if (lexer.input[start] < '0' || lexer.input[start] > '9') {
+        return 0;
+    }
+    while (end < lexer.length &&
+           ((lexer.input[end] >= '0' && lexer.input[end] <= '9') || lexer.input[end] == '_')) {
+        end++;
+    }
+    if (end < lexer.length && (lexer.input[end] == '.' || lexer.input[end] == 'e' || lexer.input[end] == 'E')) {
+        return 0;
+    }
+    int invalid = 0;
+    int nonzero = 0;
+    int64_t value = 0;
+    for (size_t i = start; i < end; i++) {
+        char character = lexer.input[i];
+        if (character == '_') {
+            if (i == start || i + 1 == end || lexer.input[i - 1] == '_' || lexer.input[i + 1] == '_') {
+                invalid = 1;
+            }
+        } else {
+            int digit = character - '0';
+            if (digit != 0) {
+                nonzero = 1;
+            }
+            if (value > (INT64_MAX - digit) / 10) {
+                invalid = 1;
+            } else {
+                value = value * 10 + digit;
+            }
+        }
+    }
+    if (lexer.input[start] == '0' && nonzero && end - start > 1) {
+        invalid = 1;
+    }
+    if (invalid) {
+        token->type = TOKEN_ERROR;
+        token->value = 99;
+        token->float_value = 0.0;
+        token->length = 0;
+        token->context = malloc(2);
+        if (token->context != NULL) {
+            memcpy(token->context, "1", 2);
+            token->value = 1;
+        }
+        return 1;
+    }
+    size_t length = end - start;
+    token->context = malloc(length + 1);
+    if (token->context == NULL) {
+        *token = lexer_internal_error();
+        return 1;
+    }
+    memcpy(token->context, lexer.input + start, length);
+    token->context[length] = '\0';
+    token->type = TOKEN_INT;
+    token->value = value;
+    token->float_value = 0.0;
+    token->length = length;
+    lexer.position = end;
+    return 1;
+}
+
+// Kontrola, zda je kontext desetinym cislem
+static int is_float(Token *token) {
+    size_t start = lexer.position;
+    size_t end = start;
+    int has_digits = 0;
+    int invalid = 0;
+    if (lexer.input[start] != '.' && (lexer.input[start] < '0' || lexer.input[start] > '9')) {
+        return 0;
+    }
+    if (lexer.input[start] == '.' && (start + 1 == lexer.length || lexer.input[start + 1] < '0' || lexer.input[start + 1] > '9')) {
+        return 0;
+    }
+    while (end < lexer.length && ((lexer.input[end] >= '0' && lexer.input[end] <= '9') || lexer.input[end] == '_')) {
+        if (lexer.input[end] == '_') {
+            if (end == start || end + 1 == lexer.length || lexer.input[end - 1] < '0' || lexer.input[end - 1] > '9' || lexer.input[end + 1] < '0' || lexer.input[end + 1] > '9') {
+                invalid = 1;
+            }
+        } else {
+            has_digits = 1;
+        }
+        end++;
+    }
+    int has_dot = 0;
+    if (end < lexer.length && lexer.input[end] == '.') {
+        has_dot = 1;
+        end++;
+        size_t first = end;
+        while (end < lexer.length && ((lexer.input[end] >= '0' && lexer.input[end] <= '9') || lexer.input[end] == '_')) {
+            if (lexer.input[end] == '_' && (end == first || end + 1 == lexer.length || lexer.input[end - 1] < '0' || lexer.input[end - 1] > '9' || lexer.input[end + 1] < '0' || lexer.input[end + 1] > '9')) {
+                invalid = 1;
+            }
+            end++;
+        }
+        if (end == first) {
+            invalid = 1;
+        }
+    }
+    if (end < lexer.length && (lexer.input[end] == 'e' || lexer.input[end] == 'E')) {
+        end++;
+        if (end < lexer.length && (lexer.input[end] == '+' || lexer.input[end] == '-')) {
+            end++;
+        }
+        size_t first = end;
+        while (end < lexer.length && ((lexer.input[end] >= '0' && lexer.input[end] <= '9') || lexer.input[end] == '_')) {
+            if (lexer.input[end] == '_' && (end == first || end + 1 == lexer.length || lexer.input[end - 1] < '0' || lexer.input[end - 1] > '9' || lexer.input[end + 1] < '0' || lexer.input[end + 1] > '9')) {
+                invalid = 1;
+            }
+            end++;
+        }
+        if (end == first || (!has_digits && !has_dot)) {
+            invalid = 1;
+        }
+    } else if (!has_dot) {
+        return 0;
+    }
+    if (end < lexer.length && (lexer.input[end] == 'd' || lexer.input[end] == 'D')) {
+        end++;
+    }
+    if (invalid) {
+        token->type = TOKEN_ERROR;
+        token->value = 99;
+        token->float_value = 0.0;
+        token->length = 0;
+        token->context = malloc(2);
+        if (token->context != NULL) {
+            memcpy(token->context, "1", 2);
+            token->value = 1;
+        }
+        return 1;
+    }
+    size_t length = end - start;
+    token->context = malloc(length + 1);
+    if (token->context == NULL) {
+        *token = lexer_internal_error();
+        return 1;
+    }
+    memcpy(token->context, lexer.input + start, length);
+    token->context[length] = '\0';
+    char *number = malloc(length + 1);
+    if (number == NULL) {
+        free(token->context);
+        *token = lexer_internal_error();
+        return 1;
+    }
+    size_t count = 0;
+    for (size_t i = 0; i < length; i++) {
+        if (token->context[i] != '_' && token->context[i] != 'd' && token->context[i] != 'D') {
+            number[count] = token->context[i];
+            count++;
+        }
+    }
+    number[count] = '\0';
+    errno = 0;
+    token->float_value = strtod(number, NULL);
+    free(number);
+    if (errno == ERANGE) {
+        free(token->context);
+        token->type = TOKEN_ERROR;
+        token->value = 99;
+        token->float_value = 0.0;
+        token->length = 0;
+        token->context = malloc(2);
+        if (token->context != NULL) {
+            memcpy(token->context, "1", 2);
+            token->value = 1;
+        }
+        return 1;
+    }
+    token->type = TOKEN_DOUBLE;
+    token->value = 0;
+    token->length = length;
+    lexer.position = end;
+    return 1;
 }
 
 // Kontrola, zda je znak operatorem
@@ -503,8 +685,14 @@ Token lexer_next(void) {
         return read_identifier_or_keyword();
     }
 
-	// Zpracovani operatoru, oddelovacu a anotace
+	// Zpracovani operatoru, oddelovacu, anotace celych cisel a desetinnych cisel
     Token token;
+    if (is_integer(&token)) {
+        return token;
+    }
+    if (is_float(&token)) {
+        return token;
+    }
     if (is_operator(&token)) {
         return token;
     }

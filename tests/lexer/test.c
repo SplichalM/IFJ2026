@@ -156,7 +156,56 @@ static void test_lx03_identifiers(void) {
 
 int main(int argc, char **argv) {
     assert(argc == 2);
-    if (strcmp(argv[1], "lx02-eof") == 0) {
+    if (strcmp(argv[1], "lx05-integer") == 0) {
+        assert(lexer_init() == 0);
+        Token token = lexer_next();
+        assert(token.type == TOKEN_INT);
+        assert(token.value == 1000000);
+        assert(strcmp(token.context, "1_000_000") == 0);
+        free(token.context);
+        token = lexer_next();
+        assert(token.type == TOKEN_OPERATOR);
+        assert(strcmp(token.context, "-") == 0);
+        free(token.context);
+        token = lexer_next();
+        assert(token.type == TOKEN_INT);
+        assert(token.value == 42);
+        free(token.context);
+        assert_eof(lexer_next());
+        lexer_free();
+        assert(live_allocations == 0);
+    } else if (strcmp(argv[1], "lx06-float") == 0) {
+        assert(lexer_init() == 0);
+        Token token = lexer_peek();
+        assert(token.type == TOKEN_DOUBLE);
+        assert(token.float_value == 0.5);
+        assert(strcmp(token.context, ".5") == 0);
+        free(token.context);
+        token = lexer_next();
+        assert(token.type == TOKEN_DOUBLE);
+        assert(token.float_value == 0.5);
+        free(token.context);
+        token = lexer_next();
+        assert(token.type == TOKEN_DOUBLE);
+        assert(token.float_value == 125.0);
+        assert(strcmp(token.context, "1.25e+2D") == 0);
+        free(token.context);
+        token = lexer_next();
+        assert(token.type == TOKEN_DOUBLE);
+        assert(token.float_value == 1000.0);
+        free(token.context);
+        assert_eof(lexer_next());
+        lexer_free();
+        assert(live_allocations == 0);
+    } else if (strcmp(argv[1], "lx05-invalid") == 0 || strcmp(argv[1], "lx06-invalid") == 0) {
+        assert(lexer_init() == 0);
+        Token token = lexer_next();
+        assert(token.type == TOKEN_ERROR);
+        assert(token.value == 1);
+        free(token.context);
+        lexer_free();
+        assert(live_allocations == 0);
+    } else if (strcmp(argv[1], "lx02-eof") == 0) {
         test_lx02_repeated_eof();
     } else if (strcmp(argv[1], "lx02-eol") == 0) {
         test_lx02_peek_and_read_eol();

@@ -55,6 +55,16 @@ printf 'LX-04: chyba alokace textu tokenu\n'
 for input in '==' '(' '@main'; do
     printf '%s' "$input" | "$test_binary" lx04-token-no-memory
 done
+printf 'LX-05: cela cisla a minus\n'
+printf '%s' '1_000_000 -42' | "$test_binary" lx05-integer
+for input in '01' '1__0' '1_'; do
+    printf '%s' "$input" | "$test_binary" lx05-invalid
+done
+printf 'LX-06: desetinna cisla a nahled\n'
+printf '%s' '.5 1.25e+2D 1e3' | "$test_binary" lx06-float
+for input in '12.' '1e' '1e+' '1.2e-'; do
+    printf '%s' "$input" | "$test_binary" lx06-invalid
+done
 printf 'LX-09: radkovy komentar, nahled a dalsi radek\n'
 printf 'a// /* */\n  b' | "$test_binary" lx09-line
 printf 'LX-09: odsazeni po samostatnem komentari\n'
