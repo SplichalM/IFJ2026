@@ -2,6 +2,7 @@
 #define LEXER_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 typedef enum {
     TOKEN_IDENTIFIER,
@@ -13,13 +14,14 @@ typedef enum {
     TOKEN_SEPARATOR,
     TOKEN_EOL,
     TOKEN_EOF,
-    TOKEN_ERROR
+    TOKEN_ERROR,
+    TOKEN_ANNOTATION
 } TokenType;
 
 typedef struct {
     TokenType type;             // Druh tokenu.
     char *context;              // Kontext tokenu
-    int value;                  // Hodnota tokenu
+    int64_t value;              // Hodnota tokenu
 	double float_value;         // Hodnota tokenu pro double
 	size_t length;              // Delka tokenu
 } Token;
