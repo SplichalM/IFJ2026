@@ -264,6 +264,8 @@ DataType sem_call(sem_context_t* context, ASTNode* node) {
 	if (func->as.func.expl_return_type == false) {
 		sem_ensure_function_analyzed(context->functions, func);
 	}
+	return func->as.func.return_type;
+}
 
 void sem_insert_conversion(ASTNode** subnode_ptr) {
 	if (subnode_ptr == NULL || *subnode_ptr == NULL) return;
