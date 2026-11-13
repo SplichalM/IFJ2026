@@ -16,6 +16,7 @@ static void *xmalloc(size_t size) {
 static ASTNode *create_node(NodeType type) {
     ASTNode *node = (ASTNode *)xmalloc(sizeof(ASTNode));
     node->type = type;
+    node->data_type = TYPE_UNKNOWN;
     node->next = NULL;
     return node;
 }
@@ -239,6 +240,10 @@ void ast_free(ASTNode *node) {
 
             case NODE_UNARY_OP:
                 free(current->as.op.op);
+                ast_free(current->as.op.left);
+                break;
+
+            case NODE_INT2DOUBLE:
                 ast_free(current->as.op.left);
                 break;
 

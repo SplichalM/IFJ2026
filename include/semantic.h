@@ -25,6 +25,7 @@ typedef struct sem_context_t {
 
 int sem_analyze(ASTNode* tree, symtable_t* functions);
 void sem_register_builtins(symtable_t* symtable);
+void register_user_function(symtable_t *functions, ASTNode *definition);
 void sem_error(int err_code, const char* err_msg);
 
 

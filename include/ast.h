@@ -8,7 +8,9 @@ typedef enum {
     TYPE_DOUBLE,
     TYPE_STRING,
     TYPE_UNIT,
-    TYPE_UNKNOWN 
+    TYPE_UNKNOWN,
+    TYPE_BOOL,
+    TYPE_ANY 
 } DataType;
 
 typedef enum {
@@ -33,11 +35,13 @@ typedef enum {
     NODE_UNARY_OP,          // Unární operátor (-, !)
     NODE_IDENTIFIER,        // Identifikátor proměnné
     NODE_LITERAL,           // Literál (číslo, řetězec, ())
-    NODE_LIST               // Obecný seznam (argumenty, příkazy, parametry)
+    NODE_LIST,              // Obecný seznam (argumenty, příkazy, parametry)
+    NODE_INT2DOUBLE
 } NodeType;
 
 typedef struct ASTNode {
     NodeType type;
+    DataType data_type;
     struct ASTNode *next;   
     
     union {

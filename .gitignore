@@ -427,3 +427,9 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# IFJ26 build outputs
+/ifj26
+/ifj26.exe
+/ifj26_semantic
+/ifj26_semantic.exe
