@@ -18,8 +18,10 @@ static void sem_add_builtin(symtable_t* symtable, const char* name, DataType ret
 int sem_analyze(ASTNode* tree, symtable_t* functions) {
 	sem_check_main(tree);
 	ASTNode* current = tree->as.list.head;
+	sym_data_t* func = NULL;
 	while (current != NULL) {
-		sem_analyze_function(functions, current);
+		func = symtable_search(functions, current->as.func_def.name);
+		sem_ensure_function_analyzed(functions, func);
 		current = current->next;
 	}
 
@@ -43,6 +45,7 @@ void sem_analyze_function(symtable_t* functions, ASTNode* func_def) {
 		current = current->next;
 	}
 	sem_block(&context, func_def->as.func_def.body);
+	sem_check_function_result(&context, func);
 	scope_pop(&context);
 }
 
@@ -50,7 +53,7 @@ static void sem_block(sem_context_t* context, ASTNode* block) {
 	scope_push(context);
 	ASTNode* current = block->as.list.head;
 	while (current != NULL) {
-		sem_statement(context, current); // jeste neni
+		sem_statement(context, current);
 		current = current->next;
 	}
 	scope_pop(context);
@@ -153,12 +156,10 @@ static void sem_statement(sem_context_t* context, ASTNode* current) {
 		sem_while(context, current);
 		break;
 	case NODE_FUNC_CALL:
-		sem_call(context, current);
+		sem_expr_type(context, current);
 		break;
 	case NODE_RETURN:
-		if (current->as.ret_stmt.expr != NULL) {
-			sem_expr_type(context, current->as.ret_stmt.expr);
-		}
+		sem_return(context, current);
 		break;
 	default:
 		sem_expr_type(context, current);
@@ -179,6 +180,10 @@ static void sem_var_decl(sem_context_t* context, ASTNode* node) {
 
 	if (node->as.var_decl.declared_type != TYPE_UNKNOWN) {
 		var_type = node->as.var_decl.declared_type;
+		sem_check_assignable(context, node->as.var_decl.declared_type, &node->as.var_decl.value);
+	}
+	else if (node->as.var_decl.declared_type == TYPE_UNKNOWN && var_type == TYPE_BOOL) {
+		sem_error(6, "Cannot assign boolean value");
 	}
 	scope_declare(context, node->as.var_decl.name, var_type, node->as.var_decl.is_mutable);
 }
@@ -192,6 +197,7 @@ static void sem_assign(sem_context_t* context, ASTNode* node) {
 		sem_error(7, "Non mutable");
 	}
 	sem_expr_type(context, node->as.assign.value);
+	sem_check_assignable(context, var->as.var.var_type, &node->as.assign.value);
 }
 
 static void sem_if(sem_context_t* context, ASTNode* node) {
@@ -281,18 +287,24 @@ DataType sem_call(sem_context_t* context, ASTNode* node) {
 	if (func == NULL) {
 		sem_error(3, "Function not defined");
 	}
-	ASTNode* current = node->as.func_call.args->as.list.head;
+	ASTNode** slot = &node->as.func_call.args->as.list.head;
 	int i = 0;
-	while (current != NULL) {
+	while (*slot != NULL) {
 		if (i >= func->as.func.param_count) {
 			sem_error(5, "Too many arguments");
 		}
-		DataType type = sem_expr_type(context, current);
-		if (type != func->as.func.param_types[i] && func->as.func.param_types[i] != TYPE_ANY) { // Int a Double se doplni
+		DataType type = sem_expr_type(context, *slot);
+		if (!sem_types_compatible(func->as.func.param_types[i], type)) {
 			sem_error(5, "Wrong parameter type");
 		}
+		if (func->as.func.param_types[i] == TYPE_DOUBLE && type == TYPE_INT) {
+			sem_insert_conversion(slot);
+		}
 		i++;
-		current = current->next;
+		if ((*slot)->next == NULL) {
+			node->as.func_call.args->as.list.tail = *slot;
+		}
+		slot = &(*slot)->next;
 	}
 	if (i < func->as.func.param_count) {
 		sem_error(5, "Too little arguments");
@@ -301,9 +313,6 @@ DataType sem_call(sem_context_t* context, ASTNode* node) {
 	if (func->as.func.expl_return_type == false) {
 		sem_ensure_function_analyzed(context->functions, func);
 	}
-	return func->as.func.return_type;
-}
-
 	return func->as.func.return_type;
 }
 
