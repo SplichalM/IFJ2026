@@ -6,7 +6,7 @@ static sym_data_t* scope_lookup(sem_context_t* context, const char* key);
 static sym_data_t* scope_declare(sem_context_t* context, const char* key, DataType type, bool is_mutable);
 static char* sem_unique_name(sem_context_t* context, const char* name);
 
-static void sem_check_main(ASTNode* tree);
+static ASTNode* sem_check_main(ASTNode* tree);
 static void sem_block(sem_context_t* context, ASTNode* block);
 static void sem_statement(sem_context_t* context, ASTNode* current);
 static void sem_var_decl(sem_context_t* context, ASTNode* node);
@@ -18,13 +18,17 @@ static char* sem_copy_name(const char* name);
 
 
 int sem_analyze(ASTNode* tree, symtable_t* functions) {
-	sem_check_main(tree);
+	ASTNode* main_func = sem_check_main(tree);
 	ASTNode* current = tree->as.list.head;
 	sym_data_t* func = NULL;
 	while (current != NULL) {
 		func = symtable_search(functions, current->as.func_def.name);
 		sem_ensure_function_analyzed(functions, func);
 		current = current->next;
+	}
+
+	if (main_func->as.func_def.return_type != TYPE_UNIT) {
+		sem_error(6, "Main function does not return type unit");
 	}
 
 	return 0;
@@ -119,7 +123,7 @@ void sem_error(int err_code, const char* err_msg) {
 	exit(err_code);
 }
 
-static void sem_check_main(ASTNode* tree) {
+static ASTNode* sem_check_main(ASTNode* tree) {
 	ASTNode* current = tree->as.list.head;
 	int main_count = 0;
 	ASTNode* main_func = NULL;
@@ -139,9 +143,10 @@ static void sem_check_main(ASTNode* tree) {
 	if (main_func->as.func_def.params->as.list.head != NULL) {
 		sem_error(5, "Main function has parameters");
 	}
-	if (main_func->as.func_def.return_type != TYPE_UNIT) {
-		sem_error(6, "Main function is not returning type unit");
+	if (main_func->as.func_def.return_type != TYPE_UNIT && main_func->as.func_def.return_type != TYPE_UNKNOWN) {
+		sem_error(6, "Main function is not returning type unit or unknown");
 	}
+	return main_func;
 }
 
 static void sem_statement(sem_context_t* context, ASTNode* current) {
