@@ -207,6 +207,43 @@ static void sem_while(sem_context_t* context, ASTNode* node) {
 	sem_block(context, node->as.while_stmt.body);
 }
 
+void register_user_function(symtable_t *functions, ASTNode *definition)
+{
+    sym_data_t *symbol = symtable_insert(
+        functions, definition->as.func_def.name, SYM_FUNCTION
+    );
+    if (symbol == NULL) {
+        sem_error(4, "Function already defined");
+    }
+
+    func_data_t *func = &symbol->as.func;
+    func->return_type = definition->as.func_def.return_type;
+    func->expl_return_type = func->return_type != TYPE_UNKNOWN;
+    func->is_main = definition->as.func_def.is_main;
+    func->definition = definition;
+    func->param_count = 0;
+    func->param_types = NULL;
+
+    ASTNode *first_param = definition->as.func_def.params->as.list.head;
+    for (ASTNode *param = first_param; param != NULL; param = param->next) {
+        func->param_count++;
+    }
+
+    if (func->param_count == 0) {
+        return;
+    }
+
+    func->param_types = malloc(func->param_count * sizeof(*func->param_types));
+    if (func->param_types == NULL) {
+        sem_error(99, "Could not allocate parameter types");
+    }
+
+    int index = 0;
+    for (ASTNode *param = first_param; param != NULL; param = param->next) {
+        func->param_types[index++] = param->as.func_param.param_type;
+    }
+}
+
 static void sem_add_builtin(symtable_t* symtable, const char* name, DataType return_type, int param_count, const DataType* param_types) {
 	sym_data_t* func = symtable_insert(symtable, name, SYM_FUNCTION);
 	if (func == NULL) {
@@ -264,6 +301,9 @@ DataType sem_call(sem_context_t* context, ASTNode* node) {
 	if (func->as.func.expl_return_type == false) {
 		sem_ensure_function_analyzed(context->functions, func);
 	}
+	return func->as.func.return_type;
+}
+
 	return func->as.func.return_type;
 }
 
@@ -625,9 +665,7 @@ void sem_ensure_function_analyzed(symtable_t* functions, sym_data_t* func) {
 		sem_error(6, "Recursive function without explicit return type");
 	}
 
-	return func->as.func.return_type;
 	func->as.func.state = FUNC_IN_PROGRESS;
 	sem_analyze_function(functions, func->as.func.definition);
 	func->as.func.state = FUNC_DONE;
-    printf("%d", a);
 }
