@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Check that repeated lookahead agrees with reading the next token. */
 static int same_text(const char *a, const char *b) {
     if (a == NULL || b == NULL) return a == b;
     return strcmp(a, b) == 0;

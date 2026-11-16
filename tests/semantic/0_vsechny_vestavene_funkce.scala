@@ -1,0 +1,15 @@
+import ifj26.*
+@main def start(): Unit =
+  val line = readLine()
+  val integer = readInt()
+  val real = readDouble()
+  val text = toStr(integer)
+  val rounded = toInt(real)
+  val length = strLength(text)
+  val part = subStr(text, 0, length)
+  val code = ord(part, 0)
+  val char = chr(code)
+  print(char)
+  print(line)
+  print(rounded)
+  print(())

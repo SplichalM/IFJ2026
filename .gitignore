@@ -433,3 +433,6 @@ FodyWeavers.xsd
 /ifj26.exe
 /ifj26_semantic
 /ifj26_semantic.exe
+
+# Local deep tests
+/tests/deep/
