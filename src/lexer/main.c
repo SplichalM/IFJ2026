@@ -2,6 +2,8 @@
 
 #include <limits.h>
 #include <errno.h>
+#include <math.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -283,8 +285,14 @@ static int is_float(Token *token) {
     } else if (!has_dot) {
         return 0;
     }
-    if (end < lexer.length && (lexer.input[end] == 'd' || lexer.input[end] == 'D')) {
-        end++;
+    if (end < lexer.length) {
+        char suffix = lexer.input[end];
+        if (suffix == 'd' || suffix == 'D') {
+            end++;
+        } else if ((suffix == 'f' || suffix == 'F') &&
+                   (end + 1 == lexer.length || !is_identifier_part(lexer.input[end + 1]))) {
+            invalid = 1;
+        }
     }
     if (invalid) {
         token->type = TOKEN_ERROR;
@@ -322,8 +330,10 @@ static int is_float(Token *token) {
     number[count] = '\0';
     errno = 0;
     token->float_value = strtod(number, NULL);
+    bool outside_range = errno == ERANGE &&
+                         (token->float_value == 0.0 || token->float_value == HUGE_VAL);
     free(number);
-    if (errno == ERANGE) {
+    if (outside_range) {
         free(token->context);
         token->type = TOKEN_ERROR;
         token->value = 99;
@@ -620,7 +630,7 @@ static int is_line_comment(Token *token) {
         return 0;
     }
     if (lexer.input[start] != '/' || lexer.input[start + 1] != '/') {
-        return 0;
+		return 0;   // Na teto pozici zadny radkovy komentar
     }
 
     lexer.position += 2;
@@ -628,7 +638,7 @@ static int is_line_comment(Token *token) {
         lexer.position++;
     }
     if (lexer.position < lexer.length) {
-        return 2;
+		return 2;   // Pokud za komentarem nasleduje '\n'
     }
 
     token->type = TOKEN_EOL;
@@ -636,7 +646,7 @@ static int is_line_comment(Token *token) {
     token->value = 0;
     token->float_value = 0.0;
     token->length = lexer.position - start;
-    return 1;
+	return 1;       // Pokud soubor konci hned za komentarem, predat pripraveny TOKEN_EOL
 }
 
 // Blokove komentare (/* */)
@@ -740,9 +750,14 @@ Token lexer_next(void) {
 
 	// Preskoceni bilych znaku (mezery, tabulatory, carriage return)
     Token comment;
+    bool start_of_line = lexer.position == 0 || lexer.input[lexer.position - 1] == '\n';
+    bool char_tabulator = false;
     while (lexer.position < lexer.length) {
         char character = lexer.input[lexer.position];
         if (character == ' ' || character == '\t' || character == '\r') {
+            if (start_of_line && character == '\t') {
+                char_tabulator = true;
+            }
             lexer.position++;
             continue;
         }
@@ -772,29 +787,54 @@ Token lexer_next(void) {
 
     // Zpracovani konce radku
     if (lexer.input[lexer.position] == '\n') {
-        size_t next = lexer.position + 1;
-        size_t space_count = 0;
-		// Pocitani poctu mezer na zacatku radku
-        while (next < lexer.length) {
-            if (lexer.input[next] != ' ') {
+        size_t line_end = lexer.position;
+        int space_count;
+        while (true) {
+            size_t next = line_end + 1;
+            bool next_has_tabulator = false;
+            space_count = 0;
+            while (next < lexer.length) {
+                char character = lexer.input[next];
+                if (character == ' ') {
+                    if (space_count == INT_MAX) {
+                        return lexer_internal_error();
+                    }
+                    space_count++;
+                } else if (character == '\t') {
+                    next_has_tabulator = true;
+                } else if (character != '\r') {
+                    break;
+                }
+                next++;
+            }
+            if (!next_has_tabulator || next == lexer.length || lexer.input[next] != '\n') {
                 break;
             }
-
-			// Kontrola preteceni int pri pocitani mezer
-            if (space_count == INT_MAX) {
-                return lexer_internal_error();
-            }
-            space_count++;
-            next++;
+            line_end = next;
         }
 
 		// Vytvoreni tokenu pro konec radku
         Token token = {0};
         token.type = TOKEN_EOL;
         token.length = 1;
-        token.value = (int)space_count;
-        lexer.position++;
+        token.value = space_count;
+        lexer.position = line_end + 1;
         return token;
+    }
+
+    if (char_tabulator || lexer.input[lexer.position] == '`') {
+        Token error;
+        error.type = TOKEN_ERROR;
+        error.value = 99;
+        error.float_value = 0.0;
+        error.length = 0;
+        error.context = malloc(2);
+        if (error.context != NULL) {
+            error.context[0] = '1';
+            error.context[1] = '\0';
+            error.value = 1;
+        }
+        return error;
     }
 
 	// Zpracovani identifikatoru nebo klicoveho slova
@@ -826,22 +866,17 @@ Token lexer_next(void) {
         return token;
     }
 
-    if (lexer.input[lexer.position] == '`') {
-        Token error;
-        error.type = TOKEN_ERROR;
-        error.value = 99;
-        error.float_value = 0.0;
-        error.length = 0;
-        error.context = malloc(2);
-        if (error.context != NULL) {
-            error.context[0] = '1';
-            error.context[1] = '\0';
-            error.value = 1;
-        }
-        return error;
+    token.type = TOKEN_ERROR;
+    token.value = 99;
+    token.float_value = 0.0;
+    token.length = 0;
+    token.context = malloc(2);
+    if (token.context != NULL) {
+        token.context[0] = '1';
+        token.context[1] = '\0';
+        token.value = 1;
     }
-
-    return lexer_internal_error();
+    return token;
 }
 
 // Ziskani dalsiho tokenu bez posunu pozice
