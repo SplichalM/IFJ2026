@@ -14,6 +14,8 @@ static void sem_assign(sem_context_t* context, ASTNode* node);
 static void sem_if(sem_context_t* context, ASTNode* node);
 static void sem_while(sem_context_t* context, ASTNode* node);
 static void sem_add_builtin(symtable_t* symtable, const char* name, DataType return_type, int param_count, const DataType* param_types);
+static char* sem_copy_name(const char* name);
+
 
 int sem_analyze(ASTNode* tree, symtable_t* functions) {
 	sem_check_main(tree);
@@ -41,7 +43,8 @@ void sem_analyze_function(symtable_t* functions, ASTNode* func_def) {
 
 	ASTNode* current = func_def->as.func_def.params->as.list.head;
 	while (current != NULL) {
-		scope_declare(&context, current->as.func_param.name, current->as.func_param.param_type, false);
+		sym_data_t* var = scope_declare(&context, current->as.func_param.name, current->as.func_param.param_type, false);
+		current->unique_name = sem_copy_name(var->as.var.unique_name);
 		current = current->next;
 	}
 	sem_block(&context, func_def->as.func_def.body);
@@ -172,6 +175,7 @@ DataType sem_identifier(sem_context_t* context, ASTNode* node) {
 	if (var == NULL) {
 		sem_error(3, "Variable not defined");
 	}
+	node->unique_name = sem_copy_name(var->as.var.unique_name);
 	return var->as.var.var_type;
 }
 
@@ -185,7 +189,8 @@ static void sem_var_decl(sem_context_t* context, ASTNode* node) {
 	else if (node->as.var_decl.declared_type == TYPE_UNKNOWN && var_type == TYPE_BOOL) {
 		sem_error(6, "Cannot assign boolean value");
 	}
-	scope_declare(context, node->as.var_decl.name, var_type, node->as.var_decl.is_mutable);
+	sym_data_t* var = scope_declare(context, node->as.var_decl.name, var_type, node->as.var_decl.is_mutable);
+	node->unique_name = sem_copy_name(var->as.var.unique_name);
 }
 
 static void sem_assign(sem_context_t* context, ASTNode* node) {
@@ -196,6 +201,7 @@ static void sem_assign(sem_context_t* context, ASTNode* node) {
 	if (var->as.var.is_mutable == false) {
 		sem_error(7, "Non mutable");
 	}
+	node->unique_name = sem_copy_name(var->as.var.unique_name);
 	sem_expr_type(context, node->as.assign.value);
 	sem_check_assignable(context, var->as.var.var_type, &node->as.assign.value);
 }
@@ -677,4 +683,13 @@ void sem_ensure_function_analyzed(symtable_t* functions, sym_data_t* func) {
 	func->as.func.state = FUNC_IN_PROGRESS;
 	sem_analyze_function(functions, func->as.func.definition);
 	func->as.func.state = FUNC_DONE;
+}
+
+static char* sem_copy_name(const char* name) {
+	char* tmp = malloc((strlen(name) + 1) * sizeof(char));
+	if (tmp == NULL) {
+		sem_error(99, "Could not allocate memory");
+	}
+	strcpy(tmp, name);
+	return tmp;
 }
