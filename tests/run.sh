@@ -1,19 +1,23 @@
 #!/bin/sh
 
 usage() {
-    printf 'Usage: sh tests/run.sh [lexer|parser|semantic|all]\n' >&2
+    printf 'Usage: sh tests/run.sh [lexer|parser|semantic|codegen|all]\n' >&2
     exit 2
 }
 
 [ "$#" -le 1 ] || usage
 case "${1-all}" in
-    lexer|parser|semantic) ;;
+    lexer|parser|semantic|codegen) ;;
     all) set -- lexer parser semantic ;;
     *) usage ;;
 esac
 
 repo_dir=$(CDPATH= cd "$(dirname "$0")/.." && pwd) || exit 1
 cd "$repo_dir" || exit 1
+
+if [ "$1" = codegen ]; then
+    exec sh tests/codegen/run.sh
+fi
 
 compiler=${CC:-gcc}
 qt_compiler=/c/Qt/Tools/mingw1120_64/bin/gcc.exe

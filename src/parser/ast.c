@@ -17,6 +17,7 @@ static ASTNode *create_node(NodeType type) {
     ASTNode *node = (ASTNode *)xmalloc(sizeof(ASTNode));
     node->type = type;
     node->data_type = TYPE_UNKNOWN;
+    node->unique_name = NULL;
     node->next = NULL;
     return node;
 }
@@ -258,6 +259,7 @@ void ast_free(ASTNode *node) {
                 break;
         }
 
+        free(current->unique_name);
         free(current);
         current = next_node;
     }

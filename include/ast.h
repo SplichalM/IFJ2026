@@ -42,6 +42,7 @@ typedef enum {
 typedef struct ASTNode {
     NodeType type;
     DataType data_type;
+    char *unique_name; 
     struct ASTNode *next;   
     
     union {

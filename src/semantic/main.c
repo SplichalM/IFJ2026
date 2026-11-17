@@ -6,7 +6,7 @@ static sym_data_t* scope_lookup(sem_context_t* context, const char* key);
 static sym_data_t* scope_declare(sem_context_t* context, const char* key, DataType type, bool is_mutable);
 static char* sem_unique_name(sem_context_t* context, const char* name);
 
-static void sem_check_main(ASTNode* tree);
+static ASTNode* sem_check_main(ASTNode* tree);
 static void sem_block(sem_context_t* context, ASTNode* block);
 static void sem_statement(sem_context_t* context, ASTNode* current);
 static void sem_var_decl(sem_context_t* context, ASTNode* node);
@@ -14,15 +14,21 @@ static void sem_assign(sem_context_t* context, ASTNode* node);
 static void sem_if(sem_context_t* context, ASTNode* node);
 static void sem_while(sem_context_t* context, ASTNode* node);
 static void sem_add_builtin(symtable_t* symtable, const char* name, DataType return_type, int param_count, const DataType* param_types);
+static char* sem_copy_name(const char* name);
+
 
 int sem_analyze(ASTNode* tree, symtable_t* functions) {
-	sem_check_main(tree);
+	ASTNode* main_func = sem_check_main(tree);
 	ASTNode* current = tree->as.list.head;
 	sym_data_t* func = NULL;
 	while (current != NULL) {
 		func = symtable_search(functions, current->as.func_def.name);
 		sem_ensure_function_analyzed(functions, func);
 		current = current->next;
+	}
+
+	if (main_func->as.func_def.return_type != TYPE_UNIT) {
+		sem_error(6, "Main function does not return type unit");
 	}
 
 	return 0;
@@ -41,7 +47,8 @@ void sem_analyze_function(symtable_t* functions, ASTNode* func_def) {
 
 	ASTNode* current = func_def->as.func_def.params->as.list.head;
 	while (current != NULL) {
-		scope_declare(&context, current->as.func_param.name, current->as.func_param.param_type, false);
+		sym_data_t* var = scope_declare(&context, current->as.func_param.name, current->as.func_param.param_type, false);
+		current->unique_name = sem_copy_name(var->as.var.unique_name);
 		current = current->next;
 	}
 	sem_block(&context, func_def->as.func_def.body);
@@ -116,7 +123,7 @@ void sem_error(int err_code, const char* err_msg) {
 	exit(err_code);
 }
 
-static void sem_check_main(ASTNode* tree) {
+static ASTNode* sem_check_main(ASTNode* tree) {
 	ASTNode* current = tree->as.list.head;
 	int main_count = 0;
 	ASTNode* main_func = NULL;
@@ -136,9 +143,10 @@ static void sem_check_main(ASTNode* tree) {
 	if (main_func->as.func_def.params->as.list.head != NULL) {
 		sem_error(5, "Main function has parameters");
 	}
-	if (main_func->as.func_def.return_type != TYPE_UNIT) {
-		sem_error(6, "Main function is not returning type unit");
+	if (main_func->as.func_def.return_type != TYPE_UNIT && main_func->as.func_def.return_type != TYPE_UNKNOWN) {
+		sem_error(6, "Main function is not returning type unit or unknown");
 	}
+	return main_func;
 }
 
 static void sem_statement(sem_context_t* context, ASTNode* current) {
@@ -172,6 +180,7 @@ DataType sem_identifier(sem_context_t* context, ASTNode* node) {
 	if (var == NULL) {
 		sem_error(3, "Variable not defined");
 	}
+	node->unique_name = sem_copy_name(var->as.var.unique_name);
 	return var->as.var.var_type;
 }
 
@@ -185,7 +194,8 @@ static void sem_var_decl(sem_context_t* context, ASTNode* node) {
 	else if (node->as.var_decl.declared_type == TYPE_UNKNOWN && var_type == TYPE_BOOL) {
 		sem_error(6, "Cannot assign boolean value");
 	}
-	scope_declare(context, node->as.var_decl.name, var_type, node->as.var_decl.is_mutable);
+	sym_data_t* var = scope_declare(context, node->as.var_decl.name, var_type, node->as.var_decl.is_mutable);
+	node->unique_name = sem_copy_name(var->as.var.unique_name);
 }
 
 static void sem_assign(sem_context_t* context, ASTNode* node) {
@@ -196,6 +206,7 @@ static void sem_assign(sem_context_t* context, ASTNode* node) {
 	if (var->as.var.is_mutable == false) {
 		sem_error(7, "Non mutable");
 	}
+	node->unique_name = sem_copy_name(var->as.var.unique_name);
 	sem_expr_type(context, node->as.assign.value);
 	sem_check_assignable(context, var->as.var.var_type, &node->as.assign.value);
 }
@@ -677,4 +688,13 @@ void sem_ensure_function_analyzed(symtable_t* functions, sym_data_t* func) {
 	func->as.func.state = FUNC_IN_PROGRESS;
 	sem_analyze_function(functions, func->as.func.definition);
 	func->as.func.state = FUNC_DONE;
+}
+
+static char* sem_copy_name(const char* name) {
+	char* tmp = malloc((strlen(name) + 1) * sizeof(char));
+	if (tmp == NULL) {
+		sem_error(99, "Could not allocate memory");
+	}
+	strcpy(tmp, name);
+	return tmp;
 }
