@@ -441,3 +441,5 @@ FodyWeavers.xsd
 /tools/ic26int-windows-x86_64.exe
 /tools/ic26int-linux-x86_64
 /tools/ic26int-linux-aarch64
+
+!/src/codegen/builtins_p.c
