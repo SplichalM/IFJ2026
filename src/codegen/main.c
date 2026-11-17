@@ -5,6 +5,7 @@ static unsigned int label_counter = 0;
 
 static void gen_function(ASTNode* func_def);
 static void gen_collect_locals(ASTNode* block);
+static void gen_pop_params(ASTNode* param);
 
 
 unsigned int gen_new_label() {
@@ -37,9 +38,23 @@ void gen_program(ASTNode* tree) {
 	gen_builtin_helpers();
 }
 
-static void gen_function(ASTNode* func_def) { // prozatimni
+static void gen_function(ASTNode* func_def) {
 	printf("LABEL $fn$%s\n", func_def->as.func_def.name);
-	printf("CREATEFRAME\nPUSHFRAME\nPUSHS nil@nil\nPOPFRAME\nRETURN\n");
+	printf("CREATEFRAME\n"
+		"PUSHFRAME\n");
+
+	ASTNode* curr_param = func_def->as.func_def.params->as.list.head;
+	while (curr_param != NULL) {
+		printf("DEFVAR LF@%s\n", curr_param->unique_name);
+		curr_param = curr_param->next;
+	}
+
+	gen_collect_locals(func_def->as.func_def.body);
+	gen_pop_params(func_def->as.func_def.params->as.list.head);
+
+	printf("PUSHS nil@nil\n"); // nahradi se gen_body
+	printf("POPFRAME\n"
+		"RETURN\n");
 }
 
 static void gen_collect_locals(ASTNode* block) {
@@ -61,4 +76,10 @@ static void gen_collect_locals(ASTNode* block) {
 
 		current = current->next;
 	}
+}
+
+static void gen_pop_params(ASTNode* param) {
+	if (param == NULL) return;
+	gen_pop_params(param->next);
+	printf("POPS LF@%s\n", param->unique_name);
 }
