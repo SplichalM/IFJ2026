@@ -6,6 +6,16 @@ static unsigned int label_counter = 0;
 static void gen_function(ASTNode* func_def);
 static void gen_collect_locals(ASTNode* block);
 static void gen_pop_params(ASTNode* param);
+static void gen_block(ASTNode* block);
+static void gen_statement(ASTNode* node);
+
+static void gen_var_decl(ASTNode* node);
+static void gen_assign(ASTNode* node);
+static void gen_if(ASTNode* node);
+static void gen_while(ASTNode* node);
+static void gen_return(ASTNode* node);
+
+static void gen_user_call(ASTNode* node);
 
 
 unsigned int gen_new_label() {
@@ -82,4 +92,55 @@ static void gen_pop_params(ASTNode* param) {
 	if (param == NULL) return;
 	gen_pop_params(param->next);
 	printf("POPS LF@%s\n", param->unique_name);
+}
+
+static void gen_block(ASTNode* block) {
+	ASTNode* curr_stmt = block->as.list.head;
+	while (curr_stmt != NULL) {
+		gen_statement(curr_stmt);
+		curr_stmt = curr_stmt->next;
+	}
+}
+
+static void gen_statement(ASTNode* node) {
+	switch (node->type) {
+	case NODE_VAR_DECL:
+		gen_var_decl(node);
+		break;
+	case NODE_ASSIGN:
+		gen_assign(node);
+		break;
+	case NODE_IF:
+		gen_if(node);
+		break;
+	case NODE_WHILE:
+		gen_while(node);
+		break;
+	case NODE_RETURN:
+		gen_return(node);
+		break;
+	default:
+		gen_expr(node);
+		printf("POPS GF@%%trash\n");
+		break;
+	}
+}
+
+static void gen_var_decl(ASTNode* node) {
+	gen_expr(node->as.var_decl.value);
+	printf("POPS LF@%s\n", node->unique_name);
+}
+
+static void gen_assign(ASTNode* node) {
+	gen_expr(node->as.assign.value);
+	printf("POPS LF@%s\n", node->unique_name);
+}
+
+static void gen_user_call(ASTNode* node) {
+	ASTNode* curr_node = node->as.func_call.args->as.list.head;
+	while (curr_node != NULL) {
+		gen_expr(curr_node);
+		curr_node = curr_node->next;
+	}
+	printf("CALL $fn$%s\n", node->as.func_call.name);
 }
