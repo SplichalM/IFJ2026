@@ -436,3 +436,8 @@ FodyWeavers.xsd
 
 # Local deep tests
 /tests/deep/
+
+# Local IFJcode26 interpreters
+/tools/ic26int-windows-x86_64.exe
+/tools/ic26int-linux-x86_64
+/tools/ic26int-linux-aarch64
