@@ -3,6 +3,8 @@
 
 static unsigned int label_counter = 0;
 
+static ASTNode* current_function = NULL;
+
 static void gen_function(ASTNode* func_def);
 static void gen_collect_locals(ASTNode* block);
 static void gen_pop_params(ASTNode* param);
@@ -49,6 +51,7 @@ void gen_program(ASTNode* tree) {
 }
 
 static void gen_function(ASTNode* func_def) {
+	current_function = func_def;
 	printf("LABEL $fn$%s\n", func_def->as.func_def.name);
 	printf("CREATEFRAME\n"
 		"PUSHFRAME\n");
@@ -143,4 +146,53 @@ static void gen_user_call(ASTNode* node) {
 		curr_node = curr_node->next;
 	}
 	printf("CALL $fn$%s\n", node->as.func_call.name);
+}
+
+static void gen_if(ASTNode* node) {
+	unsigned int label = gen_new_label();
+
+	gen_expr(node->as.if_stmt.cond);
+
+	printf("PUSHS bool@false\n");
+	printf("JUMPIFEQS $if$%u$else\n", label);
+	
+	gen_block(node->as.if_stmt.then_block);
+
+	printf("JUMP $if$%u$end\n", label);
+	printf("LABEL $if$%u$else\n", label);
+	if (node->as.if_stmt.else_block != NULL) {
+		gen_block(node->as.if_stmt.else_block);
+	}
+	printf("LABEL $if$%u$end\n", label);
+}
+
+static void gen_while(ASTNode* node) {
+	unsigned int label = gen_new_label();
+
+	printf("LABEL $while$%u$start\n", label);
+	gen_expr(node->as.while_stmt.cond);
+
+	printf("PUSHS bool@false\n");
+	printf("JUMPIFEQS $while$%u$end\n", label);
+
+	gen_block(node->as.while_stmt.body);
+
+	printf("JUMP $while$%u$start\n", label);
+	printf("LABEL $while$%u$end\n", label);
+}
+
+static void gen_return(ASTNode* node) {
+	if (node->as.ret_stmt.expr == NULL) {
+		printf("PUSHS nil@nil\n");
+	}
+	else {
+		gen_expr(node->as.ret_stmt.expr);
+	}
+
+	if (current_function->as.func_def.return_type == TYPE_UNIT && node->as.ret_stmt.expr != NULL) {
+		printf("POPS GF@%%trash\n"
+			"PUSHS nil@nil\n");
+	}
+	printf("POPFRAME\n"
+		"RETURN\n");
 }
