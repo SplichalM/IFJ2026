@@ -196,3 +196,28 @@ static void gen_return(ASTNode* node) {
 	printf("POPFRAME\n"
 		"RETURN\n");
 }
+
+static void gen_body(ASTNode* func_def) {
+	if (func_def->as.func_def.return_type == TYPE_UNIT) {
+		gen_block(func_def->as.func_def.body);
+		printf("PUSHS nil@nil\n");
+	}
+	else {
+		ASTNode* curr_stmt = func_def->as.func_def.body->as.list.head;
+		while (curr_stmt != NULL) {
+			if (curr_stmt->next == NULL) {
+				if (curr_stmt->type == NODE_RETURN || curr_stmt->type == NODE_IF) {
+					gen_statement(curr_stmt);
+				}
+				else {
+					gen_expr(curr_stmt);
+				}
+			}
+			else {
+				gen_statement(curr_stmt);
+			}
+			curr_stmt = curr_stmt->next;
+		}
+	}
+	
+}
