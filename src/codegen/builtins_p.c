@@ -4,11 +4,6 @@
 #include <stdbool.h>
 #include "codegen.h"
 
-static void gen_read_line(void)
-{
-    fputs("READ GF@%tmp1 string\n"
-        "PUSHS GF@%tmp1\n", stdout);
-}
 
 static void gen_read_number(const char *type, const char *fallback)
 {
@@ -58,7 +53,7 @@ static void gen_to_str(){
 bool gen_builtin_call(const char *name)
 {
     if (strcmp(name, "readLine") == 0) {
-        gen_read_line();
+        gen_read_number("string", "string@");
         return true;
     }
 

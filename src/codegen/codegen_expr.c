@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "codegen_expr.h"
+#include "builtins_p.h"
 
 
 static void gen_push_string(const char* str) {
@@ -119,71 +120,31 @@ void gen_expr(ASTNode* node) {
                 arg = args_list->as.list.head;
             }
 
+            ASTNode* curr_arg = arg;
+            while (curr_arg != NULL) {
+                gen_expr(curr_arg);
+                curr_arg = curr_arg->next;
+            }
+            if (gen_builtin_call(func_name)) {
+                break;
+            }
+
             static int local_label_counter = 0; 
             int l_id = local_label_counter++;
 
-            if (strcmp(func_name, "print") == 0) {
-                gen_expr(arg);
-                if (arg->data_type == TYPE_UNIT) {
-                    printf("POPS GF@%%trash\n");
-                    printf("WRITE string@()\n");
-                } else {
-                    printf("POPS GF@%%tmp1\n");
-                    printf("WRITE GF@%%tmp1\n");
-                }
-                printf("PUSHS nil@nil\n"); 
-            }
-            else if (strcmp(func_name, "readLine") == 0) {
-                printf("READ GF@%%tmp1 string\n");
-                printf("JUMPIFNEQ $read_ok$%d GF@%%tmp1 nil@nil\n", l_id);
-                printf("MOVE GF@%%tmp1 string@\n"); 
-                printf("LABEL $read_ok$%d\n", l_id);
-                printf("PUSHS GF@%%tmp1\n");
-            }
-            else if (strcmp(func_name, "readInt") == 0) {
-                printf("READ GF@%%tmp1 int\n");
-                printf("JUMPIFNEQ $read_ok$%d GF@%%tmp1 nil@nil\n", l_id);
-                printf("MOVE GF@%%tmp1 int@0\n"); 
-                printf("LABEL $read_ok$%d\n", l_id);
-                printf("PUSHS GF@%%tmp1\n");
-            }
-            else if (strcmp(func_name, "readDouble") == 0) {
-                printf("READ GF@%%tmp1 float\n");
-                printf("JUMPIFNEQ $read_ok$%d GF@%%tmp1 nil@nil\n", l_id);
-                printf("MOVE GF@%%tmp1 float@0x0p+0\n");
-                printf("LABEL $read_ok$%d\n", l_id);
-                printf("PUSHS GF@%%tmp1\n");
-            }
-            else if (strcmp(func_name, "toStr") == 0) {
-                gen_expr(arg);
-                if (arg->data_type == TYPE_INT) {
-                    printf("INT2STRS\n");
-                } else if (arg->data_type == TYPE_DOUBLE) {
-                    printf("FLOAT2STRS\n");
-                } else if (arg->data_type == TYPE_UNIT) {
-                    printf("POPS GF@%%trash\n");
-                    printf("PUSHS string@()\n");
-                }
-            }
-            // TODO: Je potreba dopsat comentaře.
-            else if (strcmp(func_name, "toInt") == 0) {
-                gen_expr(arg);
+            
+            if (strcmp(func_name, "toInt") == 0) {
                 puts("FLOAT2INTS");
             }
             else if (strcmp(func_name, "strLength") == 0) {
-                gen_expr(arg);
                 puts("POPS GF@%tmp1");
                 puts("STRLEN GF@%tmp2 GF@%tmp1");
                 puts("PUSHS GF@%tmp2");
             }
             else if (strcmp(func_name, "chr") == 0) {
-                gen_expr(arg);
                 puts("INT2CHARS");
             }
             else if (strcmp(func_name, "ord") == 0) {
-                gen_expr(arg);
-                gen_expr(arg->next);
-
                 puts("POPS GF@%tmp2");
                 puts("POPS GF@%tmp1");
 
@@ -202,19 +163,9 @@ void gen_expr(ASTNode* node) {
                 puts("PUSHS GF@%tmp3");
             }
             else if (strcmp(func_name, "subStr") == 0) {
-                for (ASTNode* current = arg; current != NULL; current = current->next) {
-                    gen_expr(current);
-                }
                 puts("CALL $builtin$subStr");
             }
             else {
-            
-                ASTNode* curr_arg = arg;
-                while (curr_arg) {
-                    gen_expr(curr_arg);
-                    curr_arg = curr_arg->next;
-                }
-            
                 printf("CALL $fn$%s\n", func_name);
             }
             break;
