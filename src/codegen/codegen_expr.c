@@ -26,7 +26,7 @@ void gen_expr(ASTNode* node) {
         case NODE_LITERAL:
             switch (node->as.literal.type) {
                 case LIT_INT:
-                    printf("PUSHS int@%d\n", node->as.literal.val.i_val);
+                    printf("PUSHS int@%lld\n", node->as.literal.val.i_val);
                     break;
                 case LIT_DOUBLE:
                     printf("PUSHS float@%a\n", node->as.literal.val.d_val);
@@ -72,7 +72,12 @@ void gen_expr(ASTNode* node) {
             } else if (strcmp(node->as.op.op, "*") == 0) {
                     printf("MULS\n");
             } else if (strcmp(node->as.op.op, "/") == 0) {
+                if (node->data_type == TYPE_INT) {
+                    printf("IDIVS\n");
+                }
+                else {
                     printf("DIVS\n");
+                }
             } else if (strcmp(node->as.op.op, "==") == 0) {
                     printf("EQS\n");
             } else if (strcmp(node->as.op.op, "!=") == 0) {
@@ -80,19 +85,19 @@ void gen_expr(ASTNode* node) {
                     printf("NOTS\n");
             } else if (strcmp(node->as.op.op, "<") == 0) {
                     printf("LTS\n");
-            } else if (strcmp(node->as.op.op, "<=") == 0) {
+            } else if (strcmp(node->as.op.op, ">=") == 0) {
                     printf("LTS\n");
                     printf("NOTS\n");
             } else if (strcmp(node->as.op.op, ">") == 0) {
                     printf("GTS\n");
-            } else if (strcmp(node->as.op.op, ">=") == 0) {
+            } else if (strcmp(node->as.op.op, "<=") == 0) {
                     printf("GTS\n");
                     printf("NOTS\n");
             }
 
             break;
 
-        case NODE_UNNARY_OP:
+        case NODE_UNARY_OP:
             if (strcmp (node->as.op.op, "-") == 0) {
                 if (node->data_type == TYPE_INT) {
                     printf("PUSHS int@0\n");
