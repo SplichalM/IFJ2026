@@ -40,13 +40,23 @@ void gen_expr(ASTNode* node) {
             }
             break;
 
-        case NODE_IDENTIFIER:
-            printf("PUSHS LF@%s\n", node->as.identifier.name);
+        case NODE_IDENTIFIER: {
+            const char* name = node->unique_name;
+            if (name == NULL) {
+                name = node->as.identifier.name;
+            }
+            printf("PUSHS LF@%s\n", name);
+            break;
+        }
+
+        case NODE_INT2DOUBLE:
+            gen_expr(node->as.op.left);
+            puts("INT2FLOATS");
             break;
         
         case NODE_BINARY_OP:
-            gen_expr(node->as.binary_op.left);
-            gen_expr(node->as.binary_op.right);
+            gen_expr(node->as.op.left);
+            gen_expr(node->as.op.right);
             
             if (strcmp(node->as.op.op, "+") == 0){
                 if (node->data_type == TYPE_STRING) {
@@ -96,10 +106,13 @@ void gen_expr(ASTNode* node) {
             }
             break;
 
-    case NODE_FUNC_CALL: {
+        case NODE_FUNC_CALL: {
             const char* func_name = node->as.func_call.name;
             ASTNode* args_list = node->as.func_call.args;
-            ASTNode* arg = (args_list != NULL) ? args_list->as.list.head : NULL;
+            ASTNode* arg = NULL;
+            if (args_list != NULL) {
+                arg = args_list->as.list.head;
+            }
 
             static int local_label_counter = 0; 
             int l_id = local_label_counter++;
@@ -147,56 +160,47 @@ void gen_expr(ASTNode* node) {
                     printf("PUSHS string@()\n");
                 }
             }
+            // TODO: Je potreba dopsat comentaÅ™e.
             else if (strcmp(func_name, "toInt") == 0) {
                 gen_expr(arg);
-                printf("FLOAT2INTS\n"); 
+                puts("FLOAT2INTS");
             }
             else if (strcmp(func_name, "strLength") == 0) {
                 gen_expr(arg);
-                printf("POPS GF@%%tmp1\n");
-                printf("STRLEN GF@%%tmp1 GF@%%tmp1\n");
-                printf("PUSHS GF@%%tmp1\n");
+                puts("POPS GF@%tmp1");
+                puts("STRLEN GF@%tmp2 GF@%tmp1");
+                puts("PUSHS GF@%tmp2");
             }
             else if (strcmp(func_name, "chr") == 0) {
                 gen_expr(arg);
-                printf("INT2CHARS\n");
+                puts("INT2CHARS");
             }
             else if (strcmp(func_name, "ord") == 0) {
-                gen_expr(arg); 
-                gen_expr(arg->next); 
-                
-                printf("POPS GF@%%tmp2\n");
-                printf("POPS GF@%%tmp1\n");
-                printf("STRLEN GF@%%tmp3 GF@%%tmp1\n"); 
-                
-                printf("PUSHS GF@%%tmp2\n");
-                printf("PUSHS int@0\n");
-                printf("LTS\n");
-                
-                printf("PUSHS GF@%%tmp2\n");
-                printf("PUSHS GF@%%tmp3\n");
-                printf("LTS\n");
-                printf("NOTS\n");
-                
-                printf("ORS\n");
-                printf("PUSHS bool@true\n");
-                printf("JUMPIFEQS $ord_out_of_bounds$%d\n", l_id);
-                
-                printf("STRI2INT GF@%%tmp1 GF@%%tmp1 GF@%%tmp2\n");
-                printf("PUSHS GF@%%tmp1\n");
-                printf("JUMP $ord_end$%d\n", l_id);
-               
-                printf("LABEL $ord_out_of_bounds$%d\n", l_id);
-                printf("PUSHS int@-1\n");
-                printf("LABEL $ord_end$%d\n", l_id);
+                gen_expr(arg);
+                gen_expr(arg->next);
+
+                puts("POPS GF@%tmp2");
+                puts("POPS GF@%tmp1");
+
+                puts("LT GF@%tmp3 GF@%tmp2 int@0");
+                printf("JUMPIFEQ $builtin$ord$invalid$%d GF@%%tmp3 bool@true\n", l_id);
+
+                puts("STRLEN GF@%tmp3 GF@%tmp1");
+                puts("LT GF@%tmp3 GF@%tmp2 GF@%tmp3");
+                printf("JUMPIFEQ $builtin$ord$invalid$%d GF@%%tmp3 bool@false\n", l_id);
+
+                puts("STRI2INT GF@%tmp3 GF@%tmp1 GF@%tmp2");
+                printf("JUMP $builtin$ord$done$%d\n", l_id);
+                printf("LABEL $builtin$ord$invalid$%d\n", l_id);
+                puts("MOVE GF@%tmp3 int@-1");
+                printf("LABEL $builtin$ord$done$%d\n", l_id);
+                puts("PUSHS GF@%tmp3");
             }
             else if (strcmp(func_name, "subStr") == 0) {
-                ASTNode* curr_arg = arg;
-                while (curr_arg) {
-                    gen_expr(curr_arg);
-                    curr_arg = curr_arg->next;
+                for (ASTNode* current = arg; current != NULL; current = current->next) {
+                    gen_expr(current);
                 }
-                printf("CALL $builtin$subStr\n");
+                puts("CALL $builtin$subStr");
             }
             else {
             
@@ -212,94 +216,49 @@ void gen_expr(ASTNode* node) {
         }
 
         default:
-            fprintf(stderr, "Chyba generátoru: Neznamy uzel ve vyrazu\n");
+            fprintf(stderr, "Chyba generÃ¡toru: Neznamy uzel ve vyrazu\n");
             break;
     }
 }
 
 void gen_builtin_helpers(void) {
-    printf("\n# --- Pomocna funkce pro subStr ---\n");
-    printf("LABEL $builtin$subStr\n");
-    printf("CREATEFRAME\n");
-    printf("PUSHFRAME\n");
+    fputs("LABEL $builtin$subStr\n"
+          "CREATEFRAME\n"
+          "PUSHFRAME\n"
+          "DEFVAR LF@text\n"
+          "DEFVAR LF@start\n"
+          "DEFVAR LF@end\n"
+          "DEFVAR LF@length\n"
+          "DEFVAR LF@check\n"
+          "DEFVAR LF@character\n"
+          "DEFVAR LF@result\n"
+          "POPS LF@end\n"
+          "POPS LF@start\n"
+          "POPS LF@text\n"
+          "STRLEN LF@length LF@text\n", stdout);
 
-    // Vytvoøení lokálních promìnných v rámci funkce
-    printf("DEFVAR LF@s\n");
-    printf("DEFVAR LF@start\n");
-    printf("DEFVAR LF@end\n");
-    printf("DEFVAR LF@res\n");
-    printf("DEFVAR LF@len\n");
-    printf("DEFVAR LF@char\n");
+    fputs("LT LF@check LF@start int@0\n"
+          "JUMPIFEQ $builtin$subStr$invalid LF@check bool@true\n"
+          "LT LF@check LF@end int@0\n"
+          "JUMPIFEQ $builtin$subStr$invalid LF@check bool@true\n"
+          "GT LF@check LF@start LF@end\n"
+          "JUMPIFEQ $builtin$subStr$invalid LF@check bool@true\n"
+          "LT LF@check LF@start LF@length\n"
+          "JUMPIFEQ $builtin$subStr$invalid LF@check bool@false\n"
+          "GT LF@check LF@end LF@length\n"
+          "JUMPIFEQ $builtin$subStr$invalid LF@check bool@true\n", stdout);
 
-    // Výbìr argumentù ze zásobníku
-    printf("POPS LF@end\n");
-    printf("POPS LF@start\n");
-    printf("POPS LF@s\n");
-
-    printf("MOVE LF@res string@\n"); // Inicializace výsledku na prázdný øetìzec
-    printf("STRLEN LF@len LF@s\n");  // Zjištìní délky pùvodního øetìzce
-
-    // --- 1. SÉRIE KONTROL (zastaví s chybou 40, pokud indexy nesedí) ---
-    // start < 0
-    printf("PUSHS LF@start\n");
-    printf("PUSHS int@0\n");
-    printf("LTS\n");
-
-    // end < 0
-    printf("PUSHS LF@end\n");
-    printf("PUSHS int@0\n");
-    printf("LTS\n");
-    printf("ORS\n"); // Spojíme pøedchozí kontrolu
-
-    // start > end
-    printf("PUSHS LF@start\n");
-    printf("PUSHS LF@end\n");
-    printf("GTS\n");
-    printf("ORS\n");
-
-    // start >= len -> využijeme negaci (start < len)
-    printf("PUSHS LF@start\n");
-    printf("PUSHS LF@len\n");
-    printf("LTS\n");
-    printf("NOTS\n");
-    printf("ORS\n");
-
-    // end > len
-    printf("PUSHS LF@end\n");
-    printf("PUSHS LF@len\n");
-    printf("GTS\n");
-    printf("ORS\n");
-
-    // Pokud platí KTERÁKOLIV z chybových podmínek výše, jdeme na chybové návìští
-    printf("PUSHS bool@true\n");
-    printf("JUMPIFEQS $substr_error\n");
-
-    // --- 2. CYKLUS KOPÍROVÁNÍ (od 'start' do 'end') ---
-    printf("LABEL $substr_loop\n");
-    
-    // Podmínka cyklu: pokud (start < end) == false, vyskoè z cyklu
-    printf("PUSHS LF@start\n");
-    printf("PUSHS LF@end\n");
-    printf("LTS\n");
-    printf("PUSHS bool@false\n");
-    printf("JUMPIFEQS $substr_end\n"); 
-
-    // Naètení jednoho znaku na indexu 'start' a konkatenace k výsledku
-    printf("GETCHAR LF@char LF@s LF@start\n");
-    printf("CONCAT LF@res LF@res LF@char\n");
-
-    // Inkrementace (start = start + 1)
-    printf("ADD LF@start LF@start int@1\n");
-    printf("JUMP $substr_loop\n");
-
-    // --- 3. KONEC S ÚSPÌCHEM ---
-    printf("LABEL $substr_end\n");
-    printf("PUSHS LF@res\n"); // Vrácení jednoho výsledku na zásobník
-    printf("POPFRAME\n");     // Úklid lokálního rámce
-    printf("RETURN\n");
-
-    // --- 4. KONEC S CHYBOU ---
-    printf("LABEL $substr_error\n");
-    printf("EXIT int@40\n"); // Ukonèení celého interpretu s chybou
-    printf("# --- Konec pomocne funkce ---\n\n");
+    fputs("MOVE LF@result string@\n"
+          "LABEL $builtin$subStr$loop\n"
+          "JUMPIFEQ $builtin$subStr$done LF@start LF@end\n"
+          "GETCHAR LF@character LF@text LF@start\n"
+          "CONCAT LF@result LF@result LF@character\n"
+          "ADD LF@start LF@start int@1\n"
+          "JUMP $builtin$subStr$loop\n"
+          "LABEL $builtin$subStr$done\n"
+          "PUSHS LF@result\n"
+          "POPFRAME\n"
+          "RETURN\n"
+          "LABEL $builtin$subStr$invalid\n"
+          "EXIT int@40\n", stdout);
 }
