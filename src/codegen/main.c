@@ -1,59 +1,3 @@
-#include <stdio.h>
-#include <string.h>
-#include "codegen.h"
-
-static void gen_push_string (const char *str){
-	printf("PUSH string@"):
-	if (str != NULL){
-		unsigned char c;
-		while ((c =(unsigned char)*str) != '\0'){
-			if (c <= 32 || c == 35 || c== 92){
-				printf ("\\%03d", c);
-			}else{
-				putchar(c);
-			}
-		}
-	}
-	printf("\n");
-}
-
-void gen_expr (ASTNode* node) {
-	if (node == NULL) return;
-		switch(node->type){
-			case NODE_LITERAL:
-			switch (node->as.literal.type){
-				case LIT_INT:
-				printf("PUSHS int@%d\n",node->as.literal.val.i_val);
-				break;
-			case LIT_DOUBLE:
-				printf("PUSHS float@%a\n",node->as.literal.val.d_val);
-				break;
-			case LIT_STRING:
-				gen_push_string(node->as.literal.val.s_val);
-				break;
-			case LIT_UNIT:
-				printf("PUSHS nil@nil\n",node->as.literal.val.d_val);
-				break;
-			}
-			break;
-
-		case NODE_IDENTIFIER:
-			printf("PUSHs LF@%s\n", node->as.identifier.name);
-			break;
-
-		case NODE_BINARY_OP:
-			break;
-
-		case NODE_FUNC_CALL:
-			break;
-
-		default:
-			fprintf(stderr, "chyba generatoru: neznamy uzel ve vyrazu\n")
-			break;	
-	}
-}
-
-	 
 #include "codegen.h"
 #include <stdio.h>
 
@@ -73,7 +17,7 @@ static void gen_if(ASTNode* node);
 static void gen_while(ASTNode* node);
 static void gen_return(ASTNode* node);
 
-static void gen_user_call(ASTNode* node);
+static void gen_body(ASTNode* func_def);
 
 
 unsigned int gen_new_label() {
@@ -121,7 +65,7 @@ static void gen_function(ASTNode* func_def) {
 	gen_collect_locals(func_def->as.func_def.body);
 	gen_pop_params(func_def->as.func_def.params->as.list.head);
 
-	printf("PUSHS nil@nil\n"); // nahradi se gen_body
+	gen_body(func_def);
 	printf("POPFRAME\n"
 		"RETURN\n");
 }
@@ -195,14 +139,6 @@ static void gen_assign(ASTNode* node) {
 	printf("POPS LF@%s\n", node->unique_name);
 }
 
-static void gen_user_call(ASTNode* node) {
-	ASTNode* curr_node = node->as.func_call.args->as.list.head;
-	while (curr_node != NULL) {
-		gen_expr(curr_node);
-		curr_node = curr_node->next;
-	}
-	printf("CALL $fn$%s\n", node->as.func_call.name);
-}
 
 static void gen_if(ASTNode* node) {
 	unsigned int label = gen_new_label();
