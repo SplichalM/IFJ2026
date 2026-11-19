@@ -1,14 +1,10 @@
 #include "parser.h"
 #include "ast.h"
-#include <stddef.h>
-
-#ifdef IFJ_ENABLE_SEMANTICS
 #include "semantic.h"
-#endif
+#include "codegen.h"
 
 int main(void)
 {
-#ifdef IFJ_ENABLE_SEMANTICS
     symtable_t functions;
     symtable_init(&functions);
     sem_register_builtins(&functions);
@@ -16,12 +12,11 @@ int main(void)
     ASTNode *program = parse_program(&functions, register_user_function);
     int status = sem_analyze(program, &functions);
 
-    symtable_dispose(&functions);
-#else
-    ASTNode *program = parse_program(NULL, NULL);
-    int status = 0;
-#endif
+    if (status == 0) {
+        gen_program(program);
+    }
 
+    symtable_dispose(&functions);
     ast_free(program);
     return status;
 }

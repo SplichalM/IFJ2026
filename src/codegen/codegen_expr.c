@@ -27,7 +27,7 @@ void gen_expr(ASTNode* node) {
         case NODE_LITERAL:
             switch (node->as.literal.type) {
                 case LIT_INT:
-                    printf("PUSHS int@%lld\n", node->as.literal.val.i_val);
+                    printf("PUSHS int@%d\n", node->as.literal.val.i_val);
                     break;
                 case LIT_DOUBLE:
                     printf("PUSHS float@%a\n", node->as.literal.val.d_val);

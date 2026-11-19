@@ -29,8 +29,17 @@ fi
 work_dir=$(mktemp -d "${TMPDIR:-/tmp}/ifj26-codegen.XXXXXXXX") || exit 1
 program="$work_dir/program.ifjcode"
 actual="$work_dir/actual.out"
-trap 'rm -f "$program" "$actual"; rmdir "$work_dir"' EXIT
+trap 'rm -f "$program" "$actual" "$work_dir/normalized.out"; rmdir "$work_dir"' EXIT
 trap 'exit 1' HUP INT TERM
+
+# Stop an individual test if the compiler or generated program does not finish.
+run_case() {
+    if command -v timeout >/dev/null 2>&1; then
+        timeout -k 1 5 "$@"
+    else
+        "$@"
+    fi
+}
 
 total=0
 passed=0
@@ -48,7 +57,7 @@ for source in tests/codegen/*.scala; do
         continue
     fi
 
-    "$compiler" < "$source" > "$program"
+    run_case "$compiler" < "$source" > "$program"
     status=$?
     if [ "$status" -ne 0 ]; then
         printf 'FAIL %s (compiler exit %s)\n' "$name" "$status"
@@ -59,12 +68,25 @@ for source in tests/codegen/*.scala; do
         continue
     fi
 
-    "$interpreter" "$program" < "$input" > "$actual"
+    run_case "$interpreter" "$program" < "$input" > "$actual"
     status=$?
     if [ "$status" != "$expected_status" ]; then
         printf 'FAIL %s (interpreter exit %s, expected %s)\n' "$name" "$status" "$expected_status"
         continue
     fi
+    # Undo Windows stdout newline conversion before comparing with the fixtures.
+    case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*)
+            carriage_return=$(printf '\r')
+            line=
+            while IFS= read -r line; do
+                printf '%s\n' "${line%"$carriage_return"}"
+            done < "$actual" > "$work_dir/normalized.out"
+            printf '%s' "$line" >> "$work_dir/normalized.out"
+            mv "$work_dir/normalized.out" "$actual"
+            ;;
+    esac
+
     if ! cmp -s "$expected_output" "$actual"; then
         printf 'FAIL %s (output differs)\n' "$name"
         diff -u "$expected_output" "$actual"

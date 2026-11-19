@@ -1,7 +1,7 @@
 CC = gcc
 
 CFLAGS = -std=gnu11 -Wall -Wextra -pedantic -g
-CPPFLAGS = -Iinclude -I. -DIFJ_ENABLE_SEMANTICS
+CPPFLAGS = -Iinclude -I.
 
 SOURCES = \
     src/main.c \
@@ -11,7 +11,8 @@ SOURCES = \
     src/parser/stack.c \
     src/parser/ast.c \
     symtable.c \
-    $(wildcard src/semantic/*.c)
+    $(wildcard src/semantic/*.c) \
+    $(wildcard src/codegen/*.c)
 
 HEADERS = $(wildcard include/*.h) symtable.h
 TARGET = ifj26

@@ -83,13 +83,12 @@ check() {
 build_main() {
     case "$1" in
         lexer) build lexer src/lexer/main.c tests/lexer/lexer_exit.c ;;
-        parser) build_parser parser src/main.c src/lexer/main.c ;;
-        semantic) build_semantic semantic src/main.c ;;
+        parser|semantic) build_semantic "$1" src/main.c src/codegen/*.c ;;
     esac
 }
 
 build_semantic() {
-    build_parser "$@" src/lexer/main.c -Isrc/semantic -DIFJ_ENABLE_SEMANTICS symtable.c src/semantic/*.c
+    build_parser "$@" src/lexer/main.c -Isrc/semantic symtable.c src/semantic/*.c
 }
 
 run_suite() (
