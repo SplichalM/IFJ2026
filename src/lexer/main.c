@@ -175,8 +175,14 @@ static int is_integer(Token *token) {
            ((lexer.input[end] >= '0' && lexer.input[end] <= '9') || lexer.input[end] == '_')) {
         end++;
     }
-    if (end < lexer.length && (lexer.input[end] == '.' || lexer.input[end] == 'e' || lexer.input[end] == 'E')) {
-        return 0;
+    if (end < lexer.length) {
+        char next = lexer.input[end];
+        if (next == 'e' || next == 'E') {
+            return 0;
+        }
+        if (next == '.' && (end + 1 == lexer.length || !is_identifier_start(lexer.input[end + 1]))) {
+            return 0;
+        }
     }
     int invalid = 0;
     int nonzero = 0;
