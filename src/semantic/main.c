@@ -18,6 +18,7 @@ static char* sem_copy_name(const char* name);
 
 static DataType sem_member(sem_context_t* context, ASTNode* node);
 static DataType sem_if_expr(sem_context_t* context, ASTNode* node);
+static void convert_block_tail_to_double(ASTNode** body_ptr);
 
 
 int sem_analyze(ASTNode* tree, symtable_t* functions) {
@@ -627,6 +628,29 @@ DataType sem_block_result(sem_context_t* context, ASTNode* block) {
 		if (!context->curr_func->as.func.expl_return_type &&
 		    then_res == TYPE_UNIT && else_res == TYPE_UNIT) {
 			return TYPE_UNIT;
+		}
+
+		if (tail->as.if_stmt.else_block != NULL && then_res != SEM_BLOCK_RETURNS &&
+			else_res != SEM_BLOCK_RETURNS) {
+
+			if (then_res == else_res) {
+				tail->type = NODE_IF_EXPR;
+				tail->data_type = then_res;
+				return then_res;
+			}
+			else if (then_res == TYPE_INT && else_res == TYPE_DOUBLE) {
+				convert_block_tail_to_double(&tail->as.if_stmt.then_block);
+
+				tail->type = NODE_IF_EXPR;
+				tail->data_type = TYPE_DOUBLE;
+				return TYPE_DOUBLE;
+			}
+			else if (then_res == TYPE_DOUBLE && else_res == TYPE_INT) {
+				convert_block_tail_to_double(&tail->as.if_stmt.else_block);
+				tail->type = NODE_IF_EXPR;
+				tail->data_type = TYPE_DOUBLE;
+				return TYPE_DOUBLE;
+			}
 		}
 
 		sem_error(6, "Invalid 'if' statement at the end of function body");
