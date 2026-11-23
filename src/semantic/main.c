@@ -16,6 +16,8 @@ static void sem_while(sem_context_t* context, ASTNode* node);
 static void sem_add_builtin(symtable_t* symtable, const char* name, DataType return_type, int param_count, const DataType* param_types);
 static char* sem_copy_name(const char* name);
 
+static DataType sem_member(sem_context_t* context, ASTNode* node);
+
 
 int sem_analyze(ASTNode* tree, symtable_t* functions) {
 	ASTNode* main_func = sem_check_main(tree);
@@ -412,6 +414,10 @@ DataType sem_expr_type(sem_context_t* context, ASTNode* node) {
 		result_type = TYPE_DOUBLE;
 		break;
 
+	case NODE_MEMBER:
+		result_type = sem_member(context, node);
+		break;
+
 	default:
 		sem_error(99, "Invalid AST node in expression");
 	}
@@ -699,4 +705,38 @@ static char* sem_copy_name(const char* name) {
 	}
 	strcpy(tmp, name);
 	return tmp;
+}
+
+static DataType sem_member(sem_context_t* context, ASTNode* node) {
+	DataType recv = sem_expr_type(context, node->as.member.receiver);
+	const char* name = node->as.member.name;
+
+	if (strcmp(name, "toString") == 0) {
+		node->data_type = TYPE_STRING;
+		return TYPE_STRING;
+	}
+	if (strcmp(name, "toInt") == 0) {
+		if (recv != TYPE_DOUBLE && recv != TYPE_INT) {
+			sem_error(6, "Not double or int");
+		}
+		node->data_type = TYPE_INT;
+		return TYPE_INT;
+	}
+	if (strcmp(name, "floor") == 0) {
+		if (recv != TYPE_DOUBLE) {
+			sem_error(6, "Not double");
+		}
+		node->data_type = TYPE_DOUBLE;
+		return TYPE_DOUBLE;
+	}
+	if (strcmp(name, "length") == 0) {
+		if (recv != TYPE_STRING) {
+			sem_error(6, "Not a string");
+		}
+		node->data_type = TYPE_INT;
+		return TYPE_INT;
+	}
+
+	sem_error(3, "Unknown member");
+	return TYPE_UNKNOWN;
 }
