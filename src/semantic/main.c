@@ -19,6 +19,7 @@ static char* sem_copy_name(const char* name);
 static DataType sem_member(sem_context_t* context, ASTNode* node);
 static DataType sem_if_expr(sem_context_t* context, ASTNode* node);
 static void convert_block_tail_to_double(ASTNode** body_ptr);
+static void sem_for(sem_context_t* context, ASTNode* node);
 
 
 int sem_analyze(ASTNode* tree, symtable_t* functions) {
@@ -172,6 +173,9 @@ static void sem_statement(sem_context_t* context, ASTNode* current) {
 		break;
 	case NODE_RETURN:
 		sem_return(context, current);
+		break;
+	case NODE_FOR:
+		sem_for(context, current);
 		break;
 	default:
 		sem_expr_type(context, current);
@@ -604,6 +608,7 @@ DataType sem_block_result(sem_context_t* context, ASTNode* block) {
 	case NODE_VAR_DECL:
 	case NODE_ASSIGN:
 	case NODE_WHILE:
+	case NODE_FOR:
 		return TYPE_UNIT;
 
 	case NODE_RETURN:
@@ -798,4 +803,41 @@ static DataType sem_if_expr(sem_context_t* context, ASTNode* node) {
 		sem_error(6, "Incompatible data types");
 	}
 	return TYPE_UNKNOWN;
+}
+
+static void sem_for(sem_context_t* context, ASTNode* node) {
+	if (sem_expr_type(context, node->as.for_stmt.from) != TYPE_INT) {
+		sem_error(6, "From variable type not int");
+	}
+	if (sem_expr_type(context, node->as.for_stmt.to) != TYPE_INT) {
+		sem_error(6, "To variable type not int");
+	}
+	if (node->as.for_stmt.step != NULL) {
+		if (sem_expr_type(context, node->as.for_stmt.step) != TYPE_INT) {
+			sem_error(6, "Step variable type not int");
+		}
+	}
+
+	if (node->as.for_stmt.step != NULL && node->as.for_stmt.step->type == NODE_LITERAL 
+		&& node->as.for_stmt.step->as.literal.type == LIT_INT
+		&& node->as.for_stmt.step->as.literal.val.i_val == 0) {
+
+		sem_error(10, "Step literal cannot be 0");
+	}
+
+	node->as.for_stmt.to_name = sem_unique_name(context, "$to");
+	node->as.for_stmt.step_name = sem_unique_name(context, "$step");
+
+	scope_push(context);
+	sym_data_t* var = scope_declare(context, node->as.for_stmt.var_name, TYPE_INT, false);
+	node->unique_name = sem_copy_name(var->as.var.unique_name);
+
+	ASTNode* current = node->as.for_stmt.guards->as.list.head;
+	while (current != NULL) {
+		sem_check_condition(context, current);
+		current = current->next;
+	}
+
+	sem_block(context, node->as.for_stmt.body);
+	scope_pop(context);
 }
