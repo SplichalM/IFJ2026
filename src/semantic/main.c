@@ -191,9 +191,6 @@ static void sem_var_decl(sem_context_t* context, ASTNode* node) {
 		var_type = node->as.var_decl.declared_type;
 		sem_check_assignable(context, node->as.var_decl.declared_type, &node->as.var_decl.value);
 	}
-	else if (node->as.var_decl.declared_type == TYPE_UNKNOWN && var_type == TYPE_BOOL) {
-		sem_error(6, "Cannot assign boolean value");
-	}
 	sym_data_t* var = scope_declare(context, node->as.var_decl.name, var_type, node->as.var_decl.is_mutable);
 	node->unique_name = sem_copy_name(var->as.var.unique_name);
 }
@@ -291,6 +288,8 @@ void sem_register_builtins(symtable_t* symtable) {
 	sem_add_builtin(symtable, "subStr", TYPE_STRING, 3, (DataType[]) { TYPE_STRING, TYPE_INT, TYPE_INT });
 	sem_add_builtin(symtable, "ord", TYPE_INT, 2, (DataType[]) { TYPE_STRING, TYPE_INT });
 	sem_add_builtin(symtable, "chr", TYPE_STRING, 1, (DataType[]) { TYPE_INT });
+
+	sem_add_builtin(symtable, "readBoolean", TYPE_BOOL, 0, NULL);
 }
 
 DataType sem_call(sem_context_t* context, ASTNode* node) {
@@ -350,10 +349,6 @@ void sem_insert_conversion(ASTNode** subnode_ptr) {
 }
 
 bool sem_types_compatible(DataType target, DataType source) {
-
-	if (source == TYPE_BOOL || target == TYPE_BOOL) {
-		return false;
-	}
 	if (target == TYPE_ANY) {
 		return true;
 	}
@@ -392,6 +387,7 @@ DataType sem_expr_type(sem_context_t* context, ASTNode* node) {
 		case LIT_DOUBLE: result_type = TYPE_DOUBLE; break;
 		case LIT_STRING: result_type = TYPE_STRING; break;
 		case LIT_UNIT:   result_type = TYPE_UNIT; break;
+		case LIT_BOOL:   result_type = TYPE_BOOL; break; // mozna budouci zmena podle ast definice
 		default:         sem_error(99, "Unknown literal type");
 		}
 		break;
@@ -436,6 +432,14 @@ DataType sem_unary_op(sem_context_t* context, ASTNode* node) {
 		return operand_type;
 	}
 
+	if (strcmp(op, "!") == 0) {
+		if (operand_type != TYPE_BOOL) {
+			sem_error(6, "Boolean operation on non boolean variable");
+		}
+		node->data_type = TYPE_BOOL;
+		return TYPE_BOOL;
+	}
+
 	sem_error(6, "Unsupported unary operator");
 	return TYPE_UNKNOWN;
 }
@@ -445,9 +449,14 @@ DataType sem_binary_op(sem_context_t* context, ASTNode* node) {
 	DataType right_t = sem_expr_type(context, node->as.op.right);
 	const char* op = node->as.op.op;
 
-	if (left_t == TYPE_BOOL || right_t == TYPE_BOOL) {
-		sem_error(6, "Boolean expression cannot be used as operand in basic specification");
+	if ((strcmp(op, "&&") == 0 || strcmp(op, "||") == 0)) {
+		if (left_t != TYPE_BOOL || right_t != TYPE_BOOL) {
+			sem_error(6, "Boolean operation on non boolean variables");
+		}
+		node->data_type = TYPE_BOOL;
+		return TYPE_BOOL;
 	}
+	
 
 	bool left_is_num = (left_t == TYPE_INT || left_t == TYPE_DOUBLE);
 	bool right_is_num = (right_t == TYPE_INT || right_t == TYPE_DOUBLE);
@@ -560,11 +569,7 @@ void sem_return(sem_context_t* context, ASTNode* node) {
 			sem_error(6, "Empty return is only allowed in a function with explicit Unit return type");
 		}
 	} else {
-
-		DataType expr_t = sem_expr_type(context, node->as.ret_stmt.expr);
-		if (expr_t == TYPE_BOOL) {
-			sem_error(6, "Cannot return a Boolean expression in basic specification");
-		}
+		sem_expr_type(context, node->as.ret_stmt.expr);
 
 		if (expected_ret != TYPE_UNIT) {
 			sem_check_assignable(context, expected_ret, &node->as.ret_stmt.expr);
@@ -647,9 +652,6 @@ void sem_check_function_result(sem_context_t* context, sym_data_t* func) {
 	ASTNode* body = func->as.func.definition->as.func_def.body;
 	DataType body_res = sem_block_result(context, body);
 
-	if (body_res == TYPE_BOOL) {
-		sem_error(6, "Function cannot return Boolean in basic specification");
-	}
 
 	if (func->as.func.expl_return_type) {
 
