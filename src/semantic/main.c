@@ -17,6 +17,7 @@ static void sem_add_builtin(symtable_t* symtable, const char* name, DataType ret
 static char* sem_copy_name(const char* name);
 
 static DataType sem_member(sem_context_t* context, ASTNode* node);
+static DataType sem_if_expr(sem_context_t* context, ASTNode* node);
 
 
 int sem_analyze(ASTNode* tree, symtable_t* functions) {
@@ -418,6 +419,10 @@ DataType sem_expr_type(sem_context_t* context, ASTNode* node) {
 		result_type = sem_member(context, node);
 		break;
 
+	case NODE_IF_EXPR:
+		result_type = sem_if_expr(context, node);
+		break;
+
 	default:
 		sem_error(99, "Invalid AST node in expression");
 	}
@@ -738,5 +743,35 @@ static DataType sem_member(sem_context_t* context, ASTNode* node) {
 	}
 
 	sem_error(3, "Unknown member");
+	return TYPE_UNKNOWN;
+}
+
+static DataType sem_if_expr(sem_context_t* context, ASTNode* node) {
+	sem_check_condition(context, node->as.if_stmt.cond);
+
+	if (node->as.if_stmt.else_block == NULL) {
+		sem_error(6, "No else defined");
+	}
+
+	sem_block(context, node->as.if_stmt.then_block);
+	sem_block(context, node->as.if_stmt.else_block);
+
+	DataType then_t = sem_block_result(context, node->as.if_stmt.then_block);
+	DataType else_t = sem_block_result(context, node->as.if_stmt.else_block);
+
+	if (then_t == else_t) {
+		return then_t;
+	}
+	else if (then_t == TYPE_INT && else_t == TYPE_DOUBLE) {
+		convert_block_tail_to_double(&node->as.if_stmt.then_block);
+		return TYPE_DOUBLE;
+	}
+	else if (then_t == TYPE_DOUBLE && else_t == TYPE_INT) {
+		convert_block_tail_to_double(&node->as.if_stmt.else_block);
+		return TYPE_DOUBLE;
+	}
+	else {
+		sem_error(6, "Incompatible data types");
+	}
 	return TYPE_UNKNOWN;
 }
