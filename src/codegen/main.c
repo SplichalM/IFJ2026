@@ -294,7 +294,7 @@ static void gen_for(ASTNode* node) {
 
 		if (node->as.for_stmt.step->type != NODE_LITERAL) {
 			printf("JUMPIFNEQ $for$%u$ok LF@%s int@0\n", label, node->as.for_stmt.step_name);
-			printf("EXIT int@99\n"); // 99 je placeholder
+			printf("EXIT int@40\n");
 			printf("LABEL $for$%u$ok\n", label);
 		}
 	}
