@@ -840,4 +840,5 @@ static void sem_for(sem_context_t* context, ASTNode* node) {
 
 	sem_block(context, node->as.for_stmt.body);
 	scope_pop(context);
+>>>>>>> origin/develop
 }
