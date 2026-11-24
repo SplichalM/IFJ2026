@@ -20,6 +20,7 @@ static void gen_return(ASTNode* node);
 static void gen_body(ASTNode* func_def);
 
 static void gen_collect_expr_locals(ASTNode* expr);
+static void gen_for(ASTNode* node);
 
 
 unsigned int gen_new_label() {
@@ -155,6 +156,9 @@ static void gen_statement(ASTNode* node) {
 	case NODE_RETURN:
 		gen_return(node);
 		break;
+	case NODE_FOR:
+		gen_for(node);
+		break;
 	default:
 		gen_expr(node);
 		printf("POPS GF@%%trash\n");
@@ -273,4 +277,70 @@ static void gen_collect_expr_locals(ASTNode* expr) {
 	if (expr->type == NODE_MEMBER) {
 		gen_collect_expr_locals(expr->as.member.receiver);
 	}
+}
+
+static void gen_for(ASTNode* node) {
+	unsigned int label = gen_new_label();
+
+	gen_expr(node->as.for_stmt.from);
+	printf("POPS LF@%s\n", node->unique_name);
+	gen_expr(node->as.for_stmt.to);
+	printf("POPS LF@%s\n", node->as.for_stmt.to_name);
+
+	if (node->as.for_stmt.step != NULL) {
+		gen_expr(node->as.for_stmt.step);
+		printf("POPS LF@%s\n", node->as.for_stmt.step_name);
+
+		if (node->as.for_stmt.step->type != NODE_LITERAL) {
+			printf("JUMPIFNEQ $for$%u$ok LF@%s int@0\n", label, node->as.for_stmt.step_name);
+			printf("EXIT int@99\n"); // 99 je placeholder
+			printf("LABEL $for$%u$ok\n", label);
+		}
+	}
+	else {
+		printf("MOVE LF@%s int@1\n", node->as.for_stmt.step_name);
+	}
+
+	printf("LABEL $for$%u$start\n", label);
+	printf("LT GF@%%tmp1 LF@%s int@0\n", node->as.for_stmt.step_name);
+	printf("JUMPIFEQ $for$%u$neg GF@%%tmp1 bool@true\n", label);
+
+	if (node->as.for_stmt.inclusive) {
+		printf("GT GF@%%tmp1 LF@%s LF@%s\n", node->unique_name, node->as.for_stmt.to_name);
+		printf("JUMPIFEQ $for$%u$end GF@%%tmp1 bool@true\n", label);
+	}
+	else {
+		printf("LT GF@%%tmp1 LF@%s LF@%s\n", node->unique_name, node->as.for_stmt.to_name);
+		printf("JUMPIFEQ $for$%u$end GF@%%tmp1 bool@false\n", label);
+	}
+
+	printf("JUMP $for$%u$body\n", label);
+	printf("LABEL $for$%u$neg\n", label);
+
+	if (node->as.for_stmt.inclusive) {
+		printf("LT GF@%%tmp1 LF@%s LF@%s\n", node->unique_name, node->as.for_stmt.to_name);
+		printf("JUMPIFEQ $for$%u$end GF@%%tmp1 bool@true\n", label);
+	}
+	else {
+		printf("GT GF@%%tmp1 LF@%s LF@%s\n", node->unique_name, node->as.for_stmt.to_name);
+		printf("JUMPIFEQ $for$%u$end GF@%%tmp1 bool@false\n", label);
+	}
+
+	printf("LABEL $for$%u$body\n", label);
+
+	if (node->as.for_stmt.guards != NULL) {
+		ASTNode* guard = node->as.for_stmt.guards->as.list.head;
+		while (guard != NULL) {
+			gen_expr(guard);
+			printf("PUSHS bool@false\n");
+			printf("JUMPIFEQS $for$%u$next\n", label);
+			guard = guard->next;
+		}
+	}
+
+	gen_block(node->as.for_stmt.body);
+	printf("LABEL $for$%u$next\n", label);
+	printf("ADD LF@%s LF@%s LF@%s\n", node->unique_name, node->unique_name, node->as.for_stmt.step_name);
+	printf("JUMP $for$%u$start\n", label);
+	printf("LABEL $for$%u$end\n", label);
 }
