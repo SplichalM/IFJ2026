@@ -1,3 +1,5 @@
+// Autor: Jan Pospíšil (xpospij01)
+
 #include "parser.h"
 #include "lexer.h"
 #include <stdbool.h>
@@ -12,8 +14,12 @@ static Token current;
 static size_t current_indent = 0;
 static ASTNode *program_root = NULL;
 static char *pending_var_name = NULL;
-static ASTNode *pending_call = NULL;
+typedef struct PendingCall {
+    ASTNode *node;
+    struct PendingCall *previous;
+} PendingCall;
 
+static PendingCall *pending_call = NULL;
 // Práce s tokeny
 static int read_next_token(void)
 {
@@ -29,8 +35,11 @@ static void finish_parser_error(int error_code)
     ast_free(program_root);
     free(pending_var_name);
     pending_var_name = NULL;
-    ast_free(pending_call);
-    pending_call = NULL;
+    while (pending_call != NULL) {
+        PendingCall *previous = pending_call->previous;
+        ast_free(pending_call->node);
+        pending_call = previous;
+    }
     exit(error_code);
 }
 
@@ -254,51 +263,7 @@ static void parse_parameter(ASTNode *params)
     parameter->as.func_param.param_type = parse_type();
 }
 
-// vytvoří hodnotu pro identifikátor 
-static void parse_term(ASTNode *args)
-{
-    ASTNode *term;
-
-    switch (current.type) {
-        case TOKEN_IDENTIFIER: {
-            term = ast_create_ident(current.context);
-            break;
-        }
-        case TOKEN_INT: {
-            term = ast_create_literal_int(current.value);
-            break;
-        }
-        case TOKEN_DOUBLE: {
-            term = ast_create_literal_double(current.float_value);
-            break;
-        }
-        case TOKEN_STRING: {
-            term = ast_create_literal_string(current.context);
-            break;
-        }
-        case TOKEN_SEPARATOR: {
-            if(!current_text_is("(")){
-                finish_parser_error(2);
-            }
-
-            expect(TOKEN_SEPARATOR, "(");
-
-            while (current_is(TOKEN_EOL)){
-                advance();
-            }
-
-            expect(TOKEN_SEPARATOR, ")");
-
-            ast_list_append(args, ast_create_literal_unit());
-            return;
-        }
-        default:
-            finish_parser_error(2);
-    }
-
-    ast_list_append(args, term);
-    advance();
-}
+static ASTNode *parse_expression(void);
 
 // přečte argumenty v závorce a přidá je do seznamu
 static void parse_arguments(ASTNode *args)
@@ -309,7 +274,8 @@ static void parse_arguments(ASTNode *args)
 
     if(!current_text_is(")")){
         while(true){
-            parse_term(args);
+            ASTNode *argument = parse_expression();
+            ast_list_append(args, argument);
 
             consume_continuation_lines(current_indent);
 
@@ -341,20 +307,23 @@ static ASTNode *parse_function_call(void)
     }
 
     ASTNode *call = ast_create_func_call(current.context, NULL);
-    pending_call = call;
+    PendingCall pending = {
+        .node = call,
+        .previous = pending_call
+    };
+    pending_call = &pending;
     call->as.func_call.args = ast_create_list(NODE_LIST);
 
     advance();
     parse_arguments(call->as.func_call.args);
 
-    pending_call = NULL;
+    pending_call = pending.previous;
     return call;
 }
 
 static ASTNode *parse_expression(void)
 {
-    ASTNode *expression =
-        parse_precedence_expression(&current, read_next_token, current_indent);
+    ASTNode *expression = parse_precedence_expression(&current, read_next_token, current_indent, starts_function_call, parse_function_call);
 
     if (expression == NULL) {
         if (current.type == TOKEN_ERROR) {
@@ -366,13 +335,9 @@ static ASTNode *parse_expression(void)
     return expression;
 }
 
-// zavolá bud volání funkce nebo to pošle do precedence parseru
+// zpracováni hodnoty výrazu
 static ASTNode *parse_value(void)
 {
-    if(starts_function_call()){
-        return parse_function_call();
-    }
-     
     return parse_expression();
 }
 
@@ -522,12 +487,6 @@ static ASTNode *parse_statement(size_t block_indent){
     }
     if(current_is_keyword("return")){
         return parse_return();
-    }
-
-    if(starts_function_call()){
-        ASTNode *func_call = parse_function_call();
-        consume_statement_end();
-        return func_call;
     }
 
     if(starts_assignment()){

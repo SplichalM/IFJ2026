@@ -345,7 +345,7 @@ static PrecedenceAction precedence_action(PrecedenceSymbol stack_symbol, Precede
 }
 
 // zpracování výrazu s precedence tabulkou
-ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_t line_indent)
+ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_t line_indent, bool (*starts_function_call)(void), ASTNode *(*parse_function_call)(void))
 {
     PrecedenceStack stack;
     stack_init(&stack);
@@ -374,6 +374,12 @@ ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_
 
         PrecedenceSymbol input_symbol = expression_symbol(current, expect_operand);
 
+        if (parenthesis_count == 0 &&
+            token_is(current, TOKEN_SEPARATOR) &&
+            (token_text_is(current, ",") || token_text_is(current, ")"))) {
+            input_symbol = PREC_END;
+        }
+
         if (expect_operand) {
             bool empty_parentheses = input_symbol == PREC_RIGHT_PAREN && stack.count > 0 && stack.items[stack.count - 1].symbol == PREC_LEFT_PAREN;
             if (input_symbol != PREC_OPERAND && input_symbol != PREC_UNARY_MINUS && input_symbol != PREC_LEFT_PAREN && !empty_parentheses) {
@@ -399,7 +405,17 @@ ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_
                 stack_insert_marker(&stack);
             }
 
-            StackItem item = create_stack_item(current, input_symbol);
+            bool is_function_call = input_symbol == PREC_OPERAND && starts_function_call();
+
+            StackItem item = {0};
+
+            if (is_function_call) {
+                item.symbol = PREC_OPERAND;
+                item.node = parse_function_call();
+            } else {
+                item = create_stack_item(current, input_symbol);
+            }
+
             stack_push(&stack, item);
 
             if(input_symbol == PREC_LEFT_PAREN){
@@ -413,7 +429,7 @@ ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_
 
              expect_operand = input_symbol != PREC_OPERAND && input_symbol != PREC_RIGHT_PAREN;
 
-             if (advance() != 0) {
+             if (!is_function_call && advance() != 0) {
                  goto expression_error;
              }
         }else if(action == ACTION_ACCEPT){
