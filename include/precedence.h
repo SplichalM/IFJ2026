@@ -14,5 +14,5 @@ typedef enum {
     ACTION_ACCEPT
 } PrecedenceAction;
 
-ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_t line_indent, bool (*starts_function_call)(void), ASTNode *(*parse_function_call)(void));
+ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_t line_indent, bool (*starts_function_call)(void), ASTNode *(*parse_function_call)(void), ASTNode *(*parse_if_expression)(void), const char *const *stop_words);
 #endif

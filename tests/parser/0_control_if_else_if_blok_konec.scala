@@ -1,0 +1,6 @@
+import ifj26.*
+
+@main def start(): Unit =
+  val x = if true then 1 else if false then 2 else
+    3
+  print(x)

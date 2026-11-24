@@ -14,6 +14,10 @@ static Token current;
 static size_t current_indent = 0;
 static ASTNode *program_root = NULL;
 static char *pending_var_name = NULL;
+static Token buffered_token;
+static bool has_buffered_token = false;
+static const char *const *expression_stop_words = NULL;
+
 typedef struct PendingCall {
     ASTNode *node;
     struct PendingCall *previous;
@@ -24,13 +28,24 @@ static PendingCall *pending_call = NULL;
 static int read_next_token(void)
 {
     free(current.context);
-    current = lexer_next();
+
+    if (has_buffered_token) {
+        current = buffered_token;
+        has_buffered_token = false;
+    } else {
+        current = lexer_next();
+    }
+
     return current.type == TOKEN_ERROR ? (int)current.value : 0;
 }
 
 static void finish_parser_error(int error_code)
 {
     free(current.context);
+    if (has_buffered_token) {
+        free(buffered_token.context);
+        has_buffered_token = false;
+    }
     lexer_free();
     ast_free(program_root);
     free(pending_var_name);
@@ -72,6 +87,26 @@ static int start(void){
 static bool current_is(TokenType type)
 {
     return current.type == type;
+}
+
+// vrátí konec řádku a zachová už načtený následující token.
+static void restore_line_end(void)
+{
+    if (current_is(TOKEN_EOL) || current_is(TOKEN_EOF)) {
+        return;
+    }
+
+    if (has_buffered_token) {
+        finish_parser_error(99);
+    }
+
+    buffered_token = current;
+    has_buffered_token = true;
+
+    current = (Token){
+        .type = TOKEN_EOL,
+        .value = (int64_t)current_indent
+    };
 }
 
 // ověření textu aktuálního tokenu (stav zůstává)
@@ -323,10 +358,15 @@ static ASTNode *parse_function_call(void)
     pending_call = pending.previous;
     return call;
 }
+static ASTNode *parse_if_expression(void);
 
-static ASTNode *parse_expression(void)
+static ASTNode *parse_expression_until(const char *const *stop_words)
 {
-    ASTNode *expression = parse_precedence_expression(&current, read_next_token, current_indent, starts_function_call, parse_function_call);
+    const char *const *previous_stop_words = expression_stop_words;
+    expression_stop_words = stop_words;
+
+    ASTNode *expression = parse_precedence_expression(&current, read_next_token, current_indent, starts_function_call, parse_function_call, parse_if_expression, stop_words);
+    expression_stop_words = previous_stop_words;
 
     if (expression == NULL) {
         if (current.type == TOKEN_ERROR) {
@@ -336,6 +376,11 @@ static ASTNode *parse_expression(void)
         finish_parser_error(2);
     }
     return expression;
+}
+
+static ASTNode *parse_expression(void)
+{
+    return parse_expression_until(NULL);
 }
 
 // zpracováni hodnoty výrazu
@@ -428,23 +473,48 @@ static ASTNode *parse_return(void){
     return ast_create_return(value);
 }
 
-// zpracování if
-static ASTNode *parse_if(size_t block_indent)
+// načte odsazený blok nebo jednořádkový výraz.
+static ASTNode *parse_branch(size_t parent_indent, const char *const *stop_words)
 {
+    if (current_is(TOKEN_EOL)) {
+        size_t body_indent = consume_line_ends();
+
+        if (current_is(TOKEN_EOF) || body_indent <= parent_indent) {
+            finish_parser_error(2);
+        }
+
+        ASTNode *block;
+        parse_block(body_indent, &block);
+        return block;
+    }
+
+    ASTNode *value = parse_expression_until(stop_words);
+
+    ASTNode *block = ast_create_list(NODE_BLOCK);
+    ast_list_append(block, value);
+
+    return block;
+}
+
+// zpracování if
+static ASTNode *parse_if(size_t block_indent, bool is_expression)
+{
+    const char *const *stop_words = is_expression ? expression_stop_words : NULL;
+
     expect(TOKEN_KEYWORD, "if");
     ASTNode *condition = parse_condition();
 
     expect(TOKEN_KEYWORD, "then");
-    size_t then_indent = consume_line_ends();
+    ASTNode *then_block = parse_branch(block_indent, stop_words);
 
-    if (current_is(TOKEN_EOF) || then_indent <= block_indent) {
-        finish_parser_error(2);
+    if (current_is(TOKEN_EOL)) {
+        consume_line_ends();
     }
-
-    ASTNode *then_block;
-    parse_block(then_indent, &then_block);
     
     if (!current_is_keyword("else") || current_indent < block_indent) {
+        if (is_expression) {
+            finish_parser_error(2);
+        }
         return ast_create_if(condition, then_block, NULL);
     }
 
@@ -455,23 +525,42 @@ static ASTNode *parse_if(size_t block_indent)
     expect(TOKEN_KEYWORD, "else");
 
     if(current_is_keyword("if")){
-        ASTNode *nelse_if = parse_if(block_indent);
+        ASTNode *nelse_if = parse_if(block_indent, is_expression);
 
         ASTNode *else_block = ast_create_list(NODE_BLOCK);
         ast_list_append(else_block, nelse_if);
-        return ast_create_if(condition, then_block, else_block);
+        ASTNode *node = ast_create_if(condition, then_block, else_block);
+
+        if (is_expression) {
+            node->type = NODE_IF_EXPR;
+        }
+
+        return node;
     }
 
-    size_t else_indent = consume_line_ends();
+    bool else_is_block = current_is(TOKEN_EOL);
+    ASTNode *else_block = parse_branch(block_indent, stop_words);
 
-    if (current_is(TOKEN_EOF) || else_indent <= block_indent) {
-        finish_parser_error(2);
+    if (is_expression && else_is_block) {
+        restore_line_end();
+    }
+    
+    if (!is_expression && current_is(TOKEN_EOL)) {
+        consume_line_ends();
+    }
+    ASTNode *node = ast_create_if(condition, then_block, else_block);
+
+    if (is_expression) {
+        node->type = NODE_IF_EXPR;
     }
 
-    ASTNode *else_block;
-    parse_block(else_indent, &else_block);
+    return node;
+}
 
-    return ast_create_if(condition, then_block, else_block);
+// zpracování if na místě výrazu.
+static ASTNode *parse_if_expression(void)
+{
+    return parse_if(current_indent, true);
 }
 
 //zpracování while
@@ -492,10 +581,110 @@ static ASTNode *parse_while(size_t block_indent){
     return ast_create_while(condition, body);
 }
 
+static ASTNode *parse_statement(size_t block_indent);
+
+// zpracování rozsahu, stráží a těla cyklu for.
+static ASTNode *parse_for(size_t block_indent)
+{
+    expect(TOKEN_KEYWORD, "for");
+
+    bool multiline = current_is(TOKEN_EOL);
+    size_t header_indent = block_indent;
+
+    if (multiline) {
+        header_indent = consume_line_ends();
+        if (current_is(TOKEN_EOF) || header_indent <= block_indent) {
+            finish_parser_error(2);
+        }
+    }
+
+    if (!current_is(TOKEN_IDENTIFIER)) {
+        finish_parser_error(2);
+    }
+
+    ASTNode *node = ast_create_for(current.context);
+    PendingCall pending = {
+        .node = node,
+        .previous = pending_call
+    };
+    pending_call = &pending;
+    node->as.for_stmt.guards = ast_create_list(NODE_LIST);
+
+    advance();
+    expect(TOKEN_OPERATOR, "<-");
+
+    const char *range_end[] = {"to", "until", NULL};
+    node->as.for_stmt.from = parse_expression_until(range_end);
+
+    if (!current_is(TOKEN_IDENTIFIER) ||
+        (!current_text_is("to") && !current_text_is("until"))) {
+        finish_parser_error(2);
+    }
+
+    node->as.for_stmt.inclusive = current_text_is("to");
+    advance();
+
+    const char *upper_end[] = {"by", "if", "do", NULL};
+    node->as.for_stmt.to = parse_expression_until(upper_end);
+
+    if (current_is(TOKEN_IDENTIFIER) && current_text_is("by")) {
+        advance();
+        const char *step_end[] = {"if", "do", NULL};
+        node->as.for_stmt.step = parse_expression_until(step_end);
+    }
+
+    const char *guard_end[] = {"if", "do", NULL};
+    for (;;) {
+        if (multiline) {
+            if (!current_is(TOKEN_EOL)) {
+                finish_parser_error(2);
+            }
+            consume_line_ends();
+
+            if (current_is_keyword("do")) {
+                if (current_indent != block_indent) {
+                    finish_parser_error(2);
+                }
+                break;
+            }
+
+            if (current_indent != header_indent) {
+                finish_parser_error(2);
+            }
+        } else if (current_is_keyword("do")) {
+            break;
+        }
+
+        expect(TOKEN_KEYWORD, "if");
+        ASTNode *guard = parse_expression_until(guard_end);
+        ast_list_append(node->as.for_stmt.guards, guard);
+    }
+
+    expect(TOKEN_KEYWORD, "do");
+
+    if (current_is(TOKEN_EOL)) {
+        size_t body_indent = consume_line_ends();
+        if (current_is(TOKEN_EOF) || body_indent <= block_indent) {
+            finish_parser_error(2);
+        }
+        parse_block(body_indent, &node->as.for_stmt.body);
+    } else {
+        node->as.for_stmt.body = ast_create_list(NODE_BLOCK);
+        ASTNode *statement = parse_statement(block_indent);
+        ast_list_append(node->as.for_stmt.body, statement);
+    }
+
+    pending_call = pending.previous;
+    return node;
+}
+
 // zpracování příkazu - vybere podle aktuálního tokenu
 static ASTNode *parse_statement(size_t block_indent){
+    if(current_is_keyword("for")){
+        return parse_for(block_indent);
+    }
     if(current_is_keyword("if")){
-        return parse_if(block_indent);
+        return parse_if(block_indent, false);
     }
     if(current_is_keyword("while")){
         return parse_while(block_indent);

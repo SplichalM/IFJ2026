@@ -4,3 +4,5 @@ def ukazka(): Unit =
     print("ano")
   else
     print("ne")
+
+@main def testMain(): Unit = ()

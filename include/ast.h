@@ -38,7 +38,9 @@ typedef enum {
     NODE_LITERAL,           // Literál (číslo, řetězec, ())
     NODE_LIST,              // Obecný seznam (argumenty, příkazy, parametry)
     NODE_INT2DOUBLE,        // Implicitní konverze z Int na Double
-    NODE_MEMBER             // Přístup ke členu hodnoty, například text.length
+    NODE_MEMBER,            // Přístup ke členu hodnoty, například text.length
+    NODE_IF_EXPR,          // If vracející hodnotu
+    NODE_FOR                // Cyklus for
 } NodeType;
 
 typedef struct ASTNode {
@@ -109,6 +111,18 @@ typedef struct ASTNode {
         } while_stmt;
 
         struct {
+            char *var_name;
+            struct ASTNode *from;
+            struct ASTNode *to;
+            struct ASTNode *step;
+            struct ASTNode *guards;
+            struct ASTNode *body;
+            bool inclusive;
+            char *to_name;
+            char *step_name;
+        } for_stmt;
+
+        struct {
             struct ASTNode *expr;
         } ret_stmt;
 
@@ -125,6 +139,7 @@ typedef struct ASTNode {
 
     } as;
 } ASTNode;
+
 
 ASTNode *ast_create_list(NodeType type);
 void ast_list_append(ASTNode *list_node, ASTNode *item);
@@ -149,6 +164,7 @@ ASTNode *ast_create_func_call(char *name, ASTNode *args);
 
 ASTNode *ast_create_if(ASTNode *cond, ASTNode *then_block, ASTNode *else_block);
 ASTNode *ast_create_while(ASTNode *cond, ASTNode *body);
+ASTNode *ast_create_for(const char *var_name);
 ASTNode *ast_create_return(ASTNode *expr);
 ASTNode *ast_create_block(ASTNode *stmt_list);
 

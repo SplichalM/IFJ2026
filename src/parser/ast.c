@@ -179,6 +179,29 @@ ASTNode *ast_create_while(ASTNode *cond, ASTNode *body) {
     return node;
 }
 
+ASTNode *ast_create_for(const char *var_name)
+{
+    ASTNode *node = create_node(NODE_FOR);
+
+    node->as.for_stmt.var_name = NULL;
+    node->as.for_stmt.from = NULL;
+    node->as.for_stmt.to = NULL;
+    node->as.for_stmt.step = NULL;
+    node->as.for_stmt.guards = NULL;
+    node->as.for_stmt.body = NULL;
+    node->as.for_stmt.inclusive = true;
+    node->as.for_stmt.to_name = NULL;
+    node->as.for_stmt.step_name = NULL;
+
+    node->as.for_stmt.var_name = strdup(var_name);
+    if (node->as.for_stmt.var_name == NULL) {
+        ast_free(node);
+        exit(99);
+    }
+
+    return node;
+}
+
 ASTNode *ast_create_return(ASTNode *expr) {
     ASTNode *node = create_node(NODE_RETURN);
     node->as.ret_stmt.expr = expr;
@@ -242,6 +265,7 @@ void ast_free(ASTNode *node) {
                 break;
 
             case NODE_IF:
+            case NODE_IF_EXPR:
                 ast_free(current->as.if_stmt.cond);
                 ast_free(current->as.if_stmt.then_block);
                 ast_free(current->as.if_stmt.else_block);
@@ -283,6 +307,16 @@ void ast_free(ASTNode *node) {
             case NODE_MEMBER:
                 ast_free(current->as.member.receiver);
                 free(current->as.member.name);
+                break;
+            case NODE_FOR:
+                free(current->as.for_stmt.var_name);
+                ast_free(current->as.for_stmt.from);
+                ast_free(current->as.for_stmt.to);
+                ast_free(current->as.for_stmt.step);
+                ast_free(current->as.for_stmt.guards);
+                ast_free(current->as.for_stmt.body);
+                free(current->as.for_stmt.to_name);
+                free(current->as.for_stmt.step_name);
                 break;
         }
 

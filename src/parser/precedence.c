@@ -64,7 +64,11 @@ static PrecedenceSymbol expression_symbol(const Token *token, bool expect_operan
         return PREC_OPERAND;
     } 
 
-    if(token_is_keyword(token, "then")|| token_is_keyword(token, "do")){
+    if(token_is_keyword(token, "if")){
+        return PREC_OPERAND;
+    }
+
+    if(token_is_keyword(token, "then")|| token_is_keyword(token, "do") || token_is_keyword(token, "else")){
         return PREC_END;
     }
     if (token_is(token, TOKEN_EOL) || token_is(token, TOKEN_EOF)) {
@@ -360,7 +364,7 @@ static PrecedenceAction precedence_action(PrecedenceSymbol stack_symbol, Precede
 }
 
 // zpracování výrazu s precedence tabulkou
-ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_t line_indent, bool (*starts_function_call)(void), ASTNode *(*parse_function_call)(void))
+ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_t line_indent, bool (*starts_function_call)(void), ASTNode *(*parse_function_call)(void), ASTNode *(*parse_if_expression)(void), const char *const *stop_words)
 {
     PrecedenceStack stack;
     stack_init(&stack);
@@ -419,6 +423,19 @@ ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_
         }
 
         PrecedenceSymbol input_symbol = expression_symbol(current, expect_operand);
+        if (stop_words != NULL &&
+            !expect_operand &&
+            parenthesis_count == 0 &&
+            (token_is(current, TOKEN_IDENTIFIER) ||
+             token_is(current, TOKEN_KEYWORD))) {
+
+            for (size_t i = 0; stop_words[i] != NULL; i++) {
+                if (token_text_is(current, stop_words[i])) {
+                    input_symbol = PREC_END;
+                    break;
+                }
+            }
+        }
 
         if (parenthesis_count == 0 &&
             token_is(current, TOKEN_SEPARATOR) &&
@@ -452,12 +469,16 @@ ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_
             }
 
             bool is_function_call = input_symbol == PREC_OPERAND && starts_function_call();
+            bool is_if_expression = input_symbol == PREC_OPERAND && token_is_keyword(current, "if");
 
             StackItem item = {0};
 
             if (is_function_call) {
                 item.symbol = PREC_OPERAND;
                 item.node = parse_function_call();
+           } else if (is_if_expression) {
+                item.symbol = PREC_OPERAND;
+                item.node = parse_if_expression();
             } else {
                 item = create_stack_item(current, input_symbol);
             }
@@ -475,9 +496,9 @@ ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_
 
              expect_operand = input_symbol != PREC_OPERAND && input_symbol != PREC_RIGHT_PAREN;
 
-             if (!is_function_call && advance() != 0) {
-                 goto expression_error;
-             }
+             if (!is_function_call && !is_if_expression && advance() != 0) {
+                goto expression_error;
+            }
         }else if(action == ACTION_ACCEPT){
             if(expect_operand || parenthesis_count != 0 || stack.count != 2 || stack.items[0].symbol != PREC_END || stack.items[1].symbol != PREC_EXPRESSION){
                 goto expression_error;

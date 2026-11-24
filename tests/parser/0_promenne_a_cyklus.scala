@@ -4,3 +4,5 @@ def vypocet(): Int =
   while i < 3 do
     i = i + 1
   return i
+
+@main def testMain(): Unit = ()
