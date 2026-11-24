@@ -104,7 +104,7 @@ static int is_identifier_part(char character) {
 // Kontrola, zda je kontext klicovym slovem
 static int is_keyword(const char *context) {
     static const char *const keywords[] = {
-        "def", "do", "Double", "else", "if", "import", "Int", "return",
+        "def", "do", "Double", "else", "for", "if", "import", "Int", "return",
         "String", "then", "Unit", "val", "var", "while"
     };
     for (size_t i = 0; i < sizeof keywords / sizeof keywords[0]; i++) {
@@ -511,6 +511,11 @@ static size_t check_bool_operator(char first, char next) {
     return 0;
 }
 
+// Rozpozna kontrolni sipku (<-)
+static int is_control_arrow(char first, char next) {
+    return first == '<' && next == '-';
+}
+
 // Kontrola, zda je znak operatorem
 static int is_operator(Token *token) {
     size_t start = lexer.position;
@@ -529,7 +534,7 @@ static int is_operator(Token *token) {
         case '=':
         case '<':
         case '>':
-            if (next == '=') {
+            if (next == '=' || is_control_arrow(first, next)) {
                 length = 2;
             }
             break;
