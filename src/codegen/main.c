@@ -21,6 +21,7 @@ static void gen_body(ASTNode* func_def);
 
 static void gen_collect_expr_locals(ASTNode* expr);
 static void gen_for(ASTNode* node);
+static void gen_value_block(ASTNode* block);
 
 
 unsigned int gen_new_label() {
@@ -343,4 +344,39 @@ static void gen_for(ASTNode* node) {
 	printf("ADD LF@%s LF@%s LF@%s\n", node->unique_name, node->unique_name, node->as.for_stmt.step_name);
 	printf("JUMP $for$%u$start\n", label);
 	printf("LABEL $for$%u$end\n", label);
+}
+
+void gen_if_expr(ASTNode* node) {
+	unsigned int label = gen_new_label();
+	gen_expr(node->as.if_stmt.cond);
+	
+	printf("PUSHS bool@false\n");
+	printf("JUMPIFEQS $if$%u$else\n", label);
+
+	gen_value_block(node->as.if_stmt.then_block);
+
+	printf("JUMP $if$%u$end\n", label);
+	printf("LABEL $if$%u$else\n", label);
+
+	gen_value_block(node->as.if_stmt.else_block);
+
+	printf("LABEL $if$%u$end\n", label);
+}
+
+static void gen_value_block(ASTNode* block) {
+	ASTNode* curr_stmt = block->as.list.head;
+	while (curr_stmt != NULL) {
+		if (curr_stmt->next == NULL) {
+			if (curr_stmt->type == NODE_RETURN || curr_stmt->type == NODE_IF) {
+				gen_statement(curr_stmt);
+			}
+			else {
+				gen_expr(curr_stmt);
+			}
+		}
+		else {
+			gen_statement(curr_stmt);
+		}
+		curr_stmt = curr_stmt->next;
+	}
 }
