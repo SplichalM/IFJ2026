@@ -95,10 +95,6 @@ void gen_expr(ASTNode* node) {
                 } else {
                     printf("ADDS\n");
                 }
-            } else if (strcmp(node->as.op.op, "!") == 0) {
-                gen_expr(node->as.op.left);
-                puts("NOTS\n");
-                }
             } else if (strcmp(node->as.op.op, "-") == 0) { 
                     printf("SUBS\n");
             } else if (strcmp(node->as.op.op, "*") == 0) {
@@ -140,6 +136,9 @@ void gen_expr(ASTNode* node) {
                 printf("SUBS\n");
             } else if (strcmp(node->as.op.op, "+") == 0) {
                 gen_expr(node->as.op.left);
+            } else if (strcmp(node->as.op.op, "!") == 0) {
+                gen_expr(node->as.op.left);
+                puts("NOTS");
             }
             break;
 
@@ -247,10 +246,10 @@ void gen_expr(ASTNode* node) {
         break;
     
         
-        case NODE_IF_EXPR;
+        case NODE_IF_EXPR:
             gen_if_expr(node);
             break;
-}
+
         default:
             fprintf(stderr, "Chyba generátoru: Neznamy uzel ve vyrazu\n");
             break;
