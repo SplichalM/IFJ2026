@@ -11,17 +11,19 @@
 #define A ACTION_ACCEPT
 
 static const PrecedenceAction precedence_table[PREC_END + 1][PREC_END + 1] = {
-    /* vstup:    opnd  add   mul   rel   eq   unary   (     )     $ */
+    /* vstup:    opnd add mul rel eq  and or  unary (   )   $ */
 
-    /* opnd  */ { X,    R,    R,    R,    R,    X,    X,    R,    R },
-    /* add   */ { S,    R,    S,    R,    R,    S,    S,    R,    R },
-    /* mul   */ { S,    R,    R,    R,    R,    S,    S,    R,    R },
-    /* rel   */ { S,    S,    S,    X,    R,    S,    S,    R,    R },
-    /* eq    */ { S,    S,    S,    S,    X,    S,    S,    R,    R },
-    /* unary */ { S,    R,    R,    R,    R,    S,    S,    R,    R },
-    /* (     */ { S,    S,    S,    S,    S,    S,    S,    Q,    X },
-    /* )     */ { X,    R,    R,    R,    R,    X,    X,    R,    R },
-    /* $     */ { S,    S,    S,    S,    S,    S,    S,    X,    A }
+    /* opnd  */ { X,  R,  R,  R,  R,  R,  R,  X,  X,  R,  R },
+    /* add   */ { S,  R,  S,  R,  R,  R,  R,  S,  S,  R,  R },
+    /* mul   */ { S,  R,  R,  R,  R,  R,  R,  S,  S,  R,  R },
+    /* rel   */ { S,  S,  S,  X,  R,  R,  R,  S,  S,  R,  R },
+    /* eq    */ { S,  S,  S,  S,  X,  R,  R,  S,  S,  R,  R },
+    /* and   */ { S,  S,  S,  S,  S,  R,  R,  S,  S,  R,  R },
+    /* or    */ { S,  S,  S,  S,  S,  S,  R,  S,  S,  R,  R },
+    /* unary */ { S,  R,  R,  R,  R,  R,  R,  S,  S,  R,  R },
+    /* (     */ { S,  S,  S,  S,  S,  S,  S,  S,  S,  Q,  X },
+    /* )     */ { X,  R,  R,  R,  R,  R,  R,  X,  X,  R,  R },
+    /* $     */ { S,  S,  S,  S,  S,  S,  S,  S,  S,  X,  A }
 };
 
 #undef S
@@ -58,7 +60,7 @@ static PrecedenceSymbol expression_symbol(const Token *token, bool expect_operan
         exit(1);
     }
 
-    if(token_is(token, TOKEN_IDENTIFIER) || token_is(token, TOKEN_INT) || token_is(token, TOKEN_DOUBLE) || token_is(token, TOKEN_STRING)){
+    if(token_is(token, TOKEN_IDENTIFIER) || token_is(token, TOKEN_INT) || token_is(token, TOKEN_DOUBLE) || token_is(token, TOKEN_STRING) || token_is(token, TOKEN_BOOL)){
         return PREC_OPERAND;
     } 
 
@@ -86,7 +88,7 @@ static PrecedenceSymbol expression_symbol(const Token *token, bool expect_operan
 
     if(token_is(token, TOKEN_OPERATOR)){
         if(token_text_is(token, "-")){
-            return expect_operand ? PREC_UNARY_MINUS : PREC_ADD;
+            return expect_operand ? PREC_UNARY : PREC_ADD;
         }
         if(token_text_is(token, "+")){
             return PREC_ADD;
@@ -99,6 +101,15 @@ static PrecedenceSymbol expression_symbol(const Token *token, bool expect_operan
         }
         if(token_text_is(token, "==") || token_text_is(token, "!=")){
             return PREC_EQUALITY;
+        }
+        if(token_text_is(token, "!")){
+            return PREC_UNARY;
+        }
+        if(token_text_is(token, "&&")){
+            return PREC_AND;
+        }
+        if(token_text_is(token, "||")){
+            return PREC_OR;
         }
     }
 
@@ -128,6 +139,10 @@ static ASTNode *create_operand_node(const Token *token)
         {
             return ast_create_literal_string(token->context);
         }
+        case TOKEN_BOOL:
+        {
+            return ast_create_literal_bool(token->value != 0);
+        }
         default:
         {
             exit(2);
@@ -144,7 +159,7 @@ static StackItem create_stack_item(const Token *token, PrecedenceSymbol symbol)
     if (symbol == PREC_OPERAND)
     {
         item.node = create_operand_node(token);
-    }else if (symbol == PREC_ADD || symbol == PREC_MULTIPLY || symbol == PREC_RELATION || symbol == PREC_EQUALITY || symbol == PREC_UNARY_MINUS)
+    }else if (symbol == PREC_ADD || symbol == PREC_MULTIPLY || symbol == PREC_RELATION || symbol == PREC_EQUALITY || symbol == PREC_UNARY || symbol == PREC_AND || symbol == PREC_OR)
     {
          if (token->context == NULL ||
             token->length >= sizeof(item.operator_text)) {
@@ -198,7 +213,7 @@ static void reduce_binary(PrecedenceStack *stack)
         exit(2);
     }
 
-    if(operator.symbol != PREC_ADD && operator.symbol != PREC_MULTIPLY && operator.symbol != PREC_RELATION && operator.symbol != PREC_EQUALITY){
+    if(operator.symbol != PREC_ADD && operator.symbol != PREC_MULTIPLY && operator.symbol != PREC_RELATION && operator.symbol != PREC_EQUALITY && operator.symbol != PREC_AND && operator.symbol != PREC_OR){
         exit(2);
     }
 
@@ -251,7 +266,7 @@ static void reduce_unary(PrecedenceStack *stack)
     StackItem operator = stack->items[stack->count - 2];
     StackItem mark = stack->items[stack->count - 3];
 
-    if(mark.symbol != PREC_MARKER || operator.symbol != PREC_UNARY_MINUS || expression.symbol != PREC_EXPRESSION){
+    if(mark.symbol != PREC_MARKER || operator.symbol != PREC_UNARY || expression.symbol != PREC_EXPRESSION){
         exit(2);
     }
 
@@ -413,11 +428,11 @@ ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_
 
         if (expect_operand) {
             bool empty_parentheses = input_symbol == PREC_RIGHT_PAREN && stack.count > 0 && stack.items[stack.count - 1].symbol == PREC_LEFT_PAREN;
-            if (input_symbol != PREC_OPERAND && input_symbol != PREC_UNARY_MINUS && input_symbol != PREC_LEFT_PAREN && !empty_parentheses) {
+            if (input_symbol != PREC_OPERAND && input_symbol != PREC_UNARY && input_symbol != PREC_LEFT_PAREN && !empty_parentheses) {
                 goto expression_error;
             }
         } else {
-            if (input_symbol == PREC_OPERAND || input_symbol == PREC_UNARY_MINUS || input_symbol == PREC_LEFT_PAREN || input_symbol == PREC_INVALID) {
+            if (input_symbol == PREC_OPERAND || input_symbol == PREC_UNARY || input_symbol == PREC_LEFT_PAREN || input_symbol == PREC_INVALID) {
                 goto expression_error;
             }
         }

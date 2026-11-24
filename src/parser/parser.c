@@ -233,7 +233,10 @@ static DataType parse_type(void)
         type = TYPE_STRING;
     } else if(current_text_is("Unit")){
         type = TYPE_UNIT;
-    } else {
+    } else if(current_text_is("Boolean")){
+        type = TYPE_BOOL;
+    }
+    else {
         finish_parser_error(2);
     }
 
@@ -441,11 +444,23 @@ static ASTNode *parse_if(size_t block_indent)
     ASTNode *then_block;
     parse_block(then_indent, &then_block);
     
-    if (current_is(TOKEN_EOF) || current_indent != block_indent) {
+    if (!current_is_keyword("else") || current_indent < block_indent) {
+        return ast_create_if(condition, then_block, NULL);
+    }
+
+    if (current_indent > block_indent) {
         finish_parser_error(2);
     }
 
     expect(TOKEN_KEYWORD, "else");
+
+    if(current_is_keyword("if")){
+        ASTNode *nelse_if = parse_if(block_indent);
+
+        ASTNode *else_block = ast_create_list(NODE_BLOCK);
+        ast_list_append(else_block, nelse_if);
+        return ast_create_if(condition, then_block, else_block);
+    }
 
     size_t else_indent = consume_line_ends();
 

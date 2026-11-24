@@ -79,6 +79,14 @@ ASTNode *ast_create_literal_unit(void) {
     return node;
 }
 
+ASTNode *ast_create_literal_bool(bool val)
+{
+    ASTNode *node = create_node(NODE_LITERAL);
+    node->as.literal.type = LIT_BOOL;
+    node->as.literal.val.b_val = val;
+    return node;
+}
+
 ASTNode *ast_create_ident(char *name) {
     ASTNode *node = create_node(NODE_IDENTIFIER);
     node->as.identifier.name = strdup(name);
