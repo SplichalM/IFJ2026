@@ -36,7 +36,8 @@ typedef enum {
     NODE_IDENTIFIER,        // Identifikátor proměnné
     NODE_LITERAL,           // Literál (číslo, řetězec, ())
     NODE_LIST,              // Obecný seznam (argumenty, příkazy, parametry)
-    NODE_INT2DOUBLE
+    NODE_INT2DOUBLE,        // Implicitní konverze z Int na Double
+    NODE_MEMBER             // Přístup ke členu hodnoty, například text.length
 } NodeType;
 
 typedef struct ASTNode {
@@ -58,6 +59,11 @@ typedef struct ASTNode {
         struct {
             char *name;
         } identifier;
+
+        struct {
+            struct ASTNode *receiver;
+            char *name;
+        } member;
 
         struct {
             char *name;
@@ -127,6 +133,7 @@ ASTNode *ast_create_literal_string(char *val);
 ASTNode *ast_create_literal_unit(void);
 
 ASTNode *ast_create_ident(char *name);
+ASTNode *ast_create_member(ASTNode *receiver, const char *name);
 ASTNode *ast_create_binary_op(char *op, ASTNode *left, ASTNode *right);
 ASTNode *ast_create_unary_op(char *op, ASTNode *expr);
 

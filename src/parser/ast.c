@@ -85,6 +85,21 @@ ASTNode *ast_create_ident(char *name) {
     return node;
 }
 
+ASTNode *ast_create_member(ASTNode *receiver, const char *name)
+{
+    ASTNode *node = create_node(NODE_MEMBER);
+    node->as.member.receiver = receiver;
+    node->as.member.name = strdup(name);
+
+    if (node->as.member.name == NULL) {
+        free(node);
+        ast_free(receiver);
+        exit(99);
+    }
+
+    return node;
+}
+
 ASTNode *ast_create_binary_op(char *op, ASTNode *left, ASTNode *right) {
     ASTNode *node = create_node(NODE_BINARY_OP);
     node->as.op.op = strdup(op);
@@ -256,6 +271,10 @@ void ast_free(ASTNode *node) {
                 if (current->as.literal.type == LIT_STRING) {
                     free(current->as.literal.val.s_val);
                 }
+                break;
+            case NODE_MEMBER:
+                ast_free(current->as.member.receiver);
+                free(current->as.member.name);
                 break;
         }
 

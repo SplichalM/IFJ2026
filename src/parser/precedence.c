@@ -372,6 +372,37 @@ ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_
             }
         }
 
+        if(token_is(current, TOKEN_SEPARATOR) && token_text_is(current, ".")){
+            if(expect_operand){
+                goto expression_error;
+            }
+
+            if(stack.items[stack.count - 1].symbol != PREC_EXPRESSION){
+                if(!reduce(&stack)) {
+                    goto expression_error;
+                }
+                continue;
+            }
+
+            if (advance() != 0) {
+                goto expression_error;
+            }
+
+            if(!token_is(current, TOKEN_IDENTIFIER)){
+                goto expression_error;
+            }
+
+            StackItem *receiver = &stack.items[stack.count - 1];
+            receiver->node = ast_create_member(receiver->node, current->context);
+
+            if (advance() != 0) {
+                goto expression_error;
+            }
+
+            continue;
+
+        }
+
         PrecedenceSymbol input_symbol = expression_symbol(current, expect_operand);
 
         if (parenthesis_count == 0 &&
