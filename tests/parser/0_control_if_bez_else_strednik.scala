@@ -1,0 +1,4 @@
+import ifj26.*
+
+@main def start(): Unit =
+  if true then print(1); print(2)

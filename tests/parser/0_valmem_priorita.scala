@@ -1,0 +1,5 @@
+import ifj26.*
+
+@main def start(): Unit =
+  val x = 1 + "abc".length * 2
+  print(x)

@@ -1,0 +1,4 @@
+import ifj26.*
+def f() =
+  return 1
+@main def start(): Unit = ()

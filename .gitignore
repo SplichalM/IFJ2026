@@ -427,3 +427,31 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# IFJ26 build outputs
+/ifj26
+/ifj26.exe
+/ifj26_semantic
+/ifj26_semantic.exe
+
+# Local deep tests
+/tests/deep/
+
+# Local IFJcode26 interpreters
+/tools/ic26int-windows-x86_64.exe
+/tools/ic26int-linux-x86_64
+/tools/ic26int-linux-aarch64
+
+!/src/codegen/builtins_p.c
+
+# Local trial submission archive
+/xpospij01.zip
+/xpospij01.zip.tmp
+# Local submission files and tools (not ready to commit)
+/.gitattributes
+/dokumentace.pdf
+/rozdeleni
+/rozsireni
+/tools/Dockerfile
+/tools/is_it_ok.sh
+/tools/package.py
