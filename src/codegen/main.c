@@ -19,6 +19,8 @@ static void gen_return(ASTNode* node);
 
 static void gen_body(ASTNode* func_def);
 
+static void gen_collect_expr_locals(ASTNode* expr);
+
 
 unsigned int gen_new_label() {
 	label_counter++;
@@ -76,15 +78,46 @@ static void gen_collect_locals(ASTNode* block) {
 	while (current != NULL) {
 		if (current->type == NODE_VAR_DECL) {
 			printf("DEFVAR LF@%s\n", current->unique_name);
+			gen_collect_expr_locals(current->as.var_decl.value);
 		}
 		else if (current->type == NODE_IF) {
 			gen_collect_locals(current->as.if_stmt.then_block);
 			if (current->as.if_stmt.else_block != NULL) {
 				gen_collect_locals(current->as.if_stmt.else_block);
 			}
+			gen_collect_expr_locals(current->as.if_stmt.cond);
 		}
 		else if (current->type == NODE_WHILE) {
 			gen_collect_locals(current->as.while_stmt.body);
+			gen_collect_expr_locals(current->as.while_stmt.cond);
+		}
+		else if (current->type == NODE_ASSIGN) {
+			gen_collect_expr_locals(current->as.assign.value);
+		}
+		else if (current->type == NODE_RETURN) {
+			gen_collect_expr_locals(current->as.ret_stmt.expr);
+		}
+		else if (current->type == NODE_FOR) {
+			printf("DEFVAR LF@%s\n", current->unique_name);
+			printf("DEFVAR LF@%s\n", current->as.for_stmt.to_name);
+			printf("DEFVAR LF@%s\n", current->as.for_stmt.step_name);
+
+			gen_collect_expr_locals(current->as.for_stmt.from);
+			gen_collect_expr_locals(current->as.for_stmt.to);
+			gen_collect_expr_locals(current->as.for_stmt.step);
+
+			if (current->as.for_stmt.guards != NULL) {
+				ASTNode* guard = current->as.for_stmt.guards->as.list.head;
+				while (guard != NULL) {
+					gen_collect_expr_locals(guard);
+					guard = guard->next;
+				}
+			}
+
+			gen_collect_locals(current->as.for_stmt.body);
+		}
+		else {
+			gen_collect_expr_locals(current);
 		}
 
 		current = current->next;
@@ -212,4 +245,32 @@ static void gen_body(ASTNode* func_def) {
 		}
 	}
 	
+}
+
+static void gen_collect_expr_locals(ASTNode* expr) {
+	if (expr == NULL) return;
+
+	if (expr->type == NODE_IF_EXPR) {
+		gen_collect_expr_locals(expr->as.if_stmt.cond);
+		gen_collect_locals(expr->as.if_stmt.then_block);
+		gen_collect_locals(expr->as.if_stmt.else_block);
+	}
+	if (expr->type == NODE_BINARY_OP) {
+		gen_collect_expr_locals(expr->as.op.left);
+		gen_collect_expr_locals(expr->as.op.right);
+	}
+	if (expr->type == NODE_UNARY_OP || expr->type == NODE_INT2DOUBLE) {
+		gen_collect_expr_locals(expr->as.op.left);
+	}
+	if (expr->type == NODE_FUNC_CALL) {
+		if (expr->as.func_call.args == NULL) return;
+		ASTNode* argument = expr->as.func_call.args->as.list.head;
+		while (argument != NULL) {
+			gen_collect_expr_locals(argument);
+			argument = argument->next;
+		}
+	}
+	if (expr->type == NODE_MEMBER) {
+		gen_collect_expr_locals(expr->as.member.receiver);
+	}
 }
