@@ -172,6 +172,14 @@ void gen_expr(ASTNode* node) {
                 puts("STRLEN GF@%tmp2 GF@%tmp1");
                 puts("PUSHS GF@%tmp2");
             }
+            else if (strcmp(func_name, "readBoolean") == 0) {
+                unsigned int lbl = gen_new_label();
+                puts("READ GF@%tmp1 bool");
+                printf("JUMPIFNEQ $read_bool$%u$ok GF@%%tmp1 nil@nil\n", lbl);
+                puts("MOVE GF@%tmp1 bool@false");
+                printf("LABEL $read_bool$%u$ok\n", lbl);
+                puts("PUSHS GF@%tmp1");
+            }
             else if (strcmp(func_name, "chr") == 0) {
                 puts("INT2CHARS");
             }
