@@ -115,6 +115,25 @@ static int is_keyword(const char *context) {
     return 0;
 }
 
+// Rozpozna Boolean, true a false
+static int check_bool_word(Token *token) {
+    if (strcmp(token->context, "Boolean") == 0) {
+        token->type = TOKEN_KEYWORD;
+        return 1;
+    }
+    if (strcmp(token->context, "true") == 0) {
+        token->type = TOKEN_BOOL;
+        token->value = 1;
+        return 1;
+    }
+    if (strcmp(token->context, "false") == 0) {
+        token->type = TOKEN_BOOL;
+        token->value = 0;
+        return 1;
+    }
+    return 0;
+}
+
 // Nacteni identifikatoru nebo klicoveho slova
 static Token read_identifier_or_keyword(void) {
 	// Pocitani delky identifikatoru/klicoveho slova
@@ -154,10 +173,12 @@ static Token read_identifier_or_keyword(void) {
 
     memcpy(token.context, lexer.input + start, length);
     token.context[length] = '\0';
-    if (is_keyword(token.context)) {
-        token.type = TOKEN_KEYWORD;
-    } else {
-        token.type = TOKEN_IDENTIFIER;
+    if (!check_bool_word(&token)) {
+        if (is_keyword(token.context)) {
+            token.type = TOKEN_KEYWORD;
+        } else {
+            token.type = TOKEN_IDENTIFIER;
+        }
     }
     token.length = length;
     lexer.position = end;
@@ -476,6 +497,20 @@ static int is_line_string(Token *token) {
     return 1;
 }
 
+// Rozpozna boolean operatory (&&, ||, !)
+static size_t check_bool_operator(char first, char next) {
+    if (first == '!') {
+        if (next == '=') {
+            return 2;
+        }
+        return 1;
+    }
+    if ((first == '&' && next == '&') || (first == '|' && next == '|')) {
+        return 2;
+    }
+    return 0;
+}
+
 // Kontrola, zda je znak operatorem
 static int is_operator(Token *token) {
     size_t start = lexer.position;
@@ -499,20 +534,12 @@ static int is_operator(Token *token) {
             }
             break;
         case '!':
-            if (next != '=') {
-                token->type = TOKEN_ERROR;
-                token->value = 99;
-                token->float_value = 0.0;
-                token->length = 0;
-                token->context = malloc(2);
-                if (token->context != NULL) {
-                    token->context[0] = '1';
-                    token->context[1] = '\0';
-                    token->value = 1;
-                }
-                return 1;
+        case '&':
+        case '|':
+            length = check_bool_operator(first, next);
+            if (length == 0) {
+                return 0;
             }
-            length = 2;
             break;
         case '/':
             if (next == '/' || next == '*') {
