@@ -1,0 +1,10 @@
+# Keep runtime test data byte-for-byte on every platform.
+*.in -text
+*.out -text
+*.sh text eol=lf
+
+# Preserve submission metadata and PDF bytes on every platform.
+/.gitattributes text eol=lf
+/rozdeleni text eol=lf
+/rozsireni text eol=lf
+*.pdf binary
