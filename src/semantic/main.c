@@ -1,3 +1,14 @@
+/**
+ * Projekt: Implementace překladače imperativního jazyka IFJ26
+ *
+ * Soubor: main.c (semantic)
+ * Popis: Sémantická analýza: kontrola typů, rozsahů platnosti a volání funkcí, vkládání implicitních konverzí
+ *
+ * Autoři:
+ * Tomáš Schablický (xschabt00)
+ * Azíz Hammadi ()
+ */
+
 #include "semantic.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -18,7 +29,7 @@ typedef struct sem_context_t {
 	unsigned int count;
 } sem_context_t;
 
-static void sem_error(int err_code, const char* err_msg);
+static void sem_error(int err_code, const char* err_msg); // Pomocná funkce pro vracení error kódů
 static void sem_analyze_function(symtable_t* functions, ASTNode* func_def);
 static DataType sem_identifier(sem_context_t* context, ASTNode* node);
 static DataType sem_call(sem_context_t* context, ASTNode* node);
