@@ -1,3 +1,14 @@
+﻿/**
+ * Projekt: Implementace překladače imperativního jazyka IFJ26
+ *
+ * Soubor: symtable.h
+ * Popis: Tabulka symbolů implementovaná jako vv-BVS
+ *
+ * Autoři:
+ * Tomáš Schablický (xschabt00)
+ * Azíz Hammadi ()
+ */
+
 #ifndef SYMTABLE_H
 #define SYMTABLE_H
 
@@ -40,22 +51,34 @@ typedef struct sym_data {
 	} as;
 } sym_data_t;
 
-typedef struct symtable_node {
-	char* key;
-	int height;
-	sym_data_t data;
-	struct symtable_node* left;
-	struct symtable_node* right;
-} symtable_node_t;
+typedef struct symtable_node symtable_node_t;
 
 typedef struct {
 	symtable_node_t* root;
 } symtable_t;
 
+/*
+Nastaví kořen stromu na NULL.
+*/
 void symtable_init(symtable_t* symtable);
+
+/*
+Zkontroluje existenci symtablu a rekurzivně vloží prvek.
+Vrací adresu struktury pro doplnění dat.
+Pokud prvek již existuje nebo je argument NULL, tak vrací NULL.
+*/
 sym_data_t* symtable_insert(symtable_t* symtable, const char* key, sym_type_t type);
-// void symtable_print(symtable_t* symtable);
+
+/*
+Rekurzivně uvolní pamět využitou symtablem.
+*/
 void symtable_dispose(symtable_t* symtable);
+
+/*
+Zkontroluje existenci symtablu a rekurzivně vyhledá prvek podle jména.
+Vrací adresu na strukturu dat.
+Pokud prvek neexistuje, vrací NULL.
+*/
 sym_data_t* symtable_search(symtable_t* symtable, const char* key);
 
 #endif
