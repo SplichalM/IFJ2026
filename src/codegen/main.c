@@ -1,3 +1,13 @@
+/**
+ * Projekt: Implementace překladače imperativního jazyka IFJ26
+ *
+ * Soubor: codegen.c
+ * Popis: Generování výsledného kódu podle AST
+ *
+ * Autoři:
+ * Tomáš Schablický (xschabt00)
+ */
+
 #include "codegen.h"
 #include <stdio.h>
 
@@ -24,11 +34,14 @@ static void gen_for(ASTNode* node);
 static void gen_value_block(ASTNode* block);
 
 
-unsigned int gen_new_label() {
+// Funkce vrací číslo pro unikátní návěští
+unsigned int gen_new_label(void) {
 	label_counter++;
 	return label_counter - 1;
 }
 
+// Vypíše hlavičku, pomocné globální proměnné a volání main funkce
+// pak nechá vygenerovat všechny funkce
 void gen_program(ASTNode* tree) {
 	printf(".IFJcode26\n"
 		"DEFVAR GF@%%trash\n"
@@ -54,6 +67,8 @@ void gen_program(ASTNode* tree) {
 	gen_builtin_helpers();
 }
 
+// Vygeneruje návěští, rámec, parametry a lokální proměnné
+// vybere parametry ze zásobníku a tělo funkce
 static void gen_function(ASTNode* func_def) {
 	current_function = func_def;
 	printf("LABEL $fn$%s\n", func_def->as.func_def.name);
@@ -74,6 +89,7 @@ static void gen_function(ASTNode* func_def) {
 		"RETURN\n");
 }
 
+// Projde blok a to i vnořené a vypíše proměnné na začátek funkce
 static void gen_collect_locals(ASTNode* block) {
 	ASTNode* current = block->as.list.head;
 
@@ -126,12 +142,14 @@ static void gen_collect_locals(ASTNode* block) {
 	}
 }
 
+// Rekurzivně vybere parametry ze zásobníku v opačném pořadí jak byly přidány
 static void gen_pop_params(ASTNode* param) {
 	if (param == NULL) return;
 	gen_pop_params(param->next);
 	printf("POPS LF@%s\n", param->unique_name);
 }
 
+// Vygeneruje všechny příkazy v bloku
 static void gen_block(ASTNode* block) {
 	ASTNode* curr_stmt = block->as.list.head;
 	while (curr_stmt != NULL) {
@@ -140,6 +158,7 @@ static void gen_block(ASTNode* block) {
 	}
 }
 
+// Rozbočovací funkce podle typu příkazu
 static void gen_statement(ASTNode* node) {
 	switch (node->type) {
 	case NODE_VAR_DECL:
@@ -167,17 +186,19 @@ static void gen_statement(ASTNode* node) {
 	}
 }
 
+// Vyhodnotí výraz a uloží podle unikátního jména
 static void gen_var_decl(ASTNode* node) {
 	gen_expr(node->as.var_decl.value);
 	printf("POPS LF@%s\n", node->unique_name);
 }
 
+// Vyhodnotí výraz a uloží podle unikátního jména
 static void gen_assign(ASTNode* node) {
 	gen_expr(node->as.assign.value);
 	printf("POPS LF@%s\n", node->unique_name);
 }
 
-
+// Vygeneruje podmínku, skok na "jinak", pak větve if a návěští
 static void gen_if(ASTNode* node) {
 	unsigned int label = gen_new_label();
 
@@ -196,6 +217,7 @@ static void gen_if(ASTNode* node) {
 	printf("LABEL $if$%u$end\n", label);
 }
 
+// Vygeneruje návěští, podmínku, skok na konec, samotné tělo a skok zpátky
 static void gen_while(ASTNode* node) {
 	unsigned int label = gen_new_label();
 
@@ -211,6 +233,7 @@ static void gen_while(ASTNode* node) {
 	printf("LABEL $while$%u$end\n", label);
 }
 
+// Vyhodnotí návratovou hodnotu a ukončí funkci
 static void gen_return(ASTNode* node) {
 	if (node->as.ret_stmt.expr == NULL) {
 		printf("PUSHS nil@nil\n");
@@ -227,6 +250,7 @@ static void gen_return(ASTNode* node) {
 		"RETURN\n");
 }
 
+// Vygeneruje tělo funkce, poslední výraz zůstává jako návratová hodnota na zásobníku
 static void gen_body(ASTNode* func_def) {
 	if (func_def->as.func_def.return_type == TYPE_UNIT) {
 		gen_block(func_def->as.func_def.body);
@@ -252,6 +276,7 @@ static void gen_body(ASTNode* func_def) {
 	
 }
 
+// Funkce hledá if ve výrazu a deklarace v jeho větvích
 static void gen_collect_expr_locals(ASTNode* expr) {
 	if (expr == NULL) return;
 
@@ -280,6 +305,9 @@ static void gen_collect_expr_locals(ASTNode* expr) {
 	}
 }
 
+// CONTROL
+// Funkce uloží meze a krok, nenulový krok se kontroluje za běhu, podmínka se vybere podle znaménka
+// kroku, pokud se nesplní stráž tak přeskočí tělo
 static void gen_for(ASTNode* node) {
 	unsigned int label = gen_new_label();
 
@@ -346,6 +374,8 @@ static void gen_for(ASTNode* node) {
 	printf("LABEL $for$%u$end\n", label);
 }
 
+// CONTROL
+// Generuje if jako výraz, hodnota následně zůstává na zásobníku
 void gen_if_expr(ASTNode* node) {
 	unsigned int label = gen_new_label();
 	gen_expr(node->as.if_stmt.cond);
@@ -363,6 +393,7 @@ void gen_if_expr(ASTNode* node) {
 	printf("LABEL $if$%u$end\n", label);
 }
 
+// Stejné jako gen_block ale poslední výraz nechá na zásobníku
 static void gen_value_block(ASTNode* block) {
 	ASTNode* curr_stmt = block->as.list.head;
 	while (curr_stmt != NULL) {
