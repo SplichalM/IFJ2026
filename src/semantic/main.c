@@ -1,4 +1,51 @@
+/**
+ * Projekt: Implementace překladače imperativního jazyka IFJ26
+ *
+ * Soubor: main.c (semantic)
+ * Popis: Sémantická analýza: kontrola typů, rozsahů platnosti a volání funkcí, vkládání implicitních konverzí
+ *
+ * Autoři:
+ * Tomáš Schablický (xschabt00)
+ * Azíz Hammadi ()
+ */
+
 #include "semantic.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdbool.h>
+
+#define SEM_BLOCK_RETURNS ((DataType)-1)
+
+typedef struct sem_scope_t {
+	symtable_t vars;
+	struct sem_scope_t* next;
+} sem_scope_t;
+
+typedef struct sem_context_t {
+	symtable_t* functions;
+	sem_scope_t* top;
+	sym_data_t* curr_func;
+	unsigned int count;
+} sem_context_t;
+
+static void sem_error(int err_code, const char* err_msg); // Pomocná funkce pro vracení error kódů
+static void sem_analyze_function(symtable_t* functions, ASTNode* func_def);
+static DataType sem_identifier(sem_context_t* context, ASTNode* node);
+static DataType sem_call(sem_context_t* context, ASTNode* node);
+
+static DataType sem_expr_type(sem_context_t* context, ASTNode* node);
+static DataType sem_binary_op(sem_context_t* context, ASTNode* node);
+static DataType sem_unary_op(sem_context_t* context, ASTNode* node);
+static void sem_insert_conversion(ASTNode** subnode_ptr);
+static bool sem_types_compatible(DataType target, DataType source);
+static void sem_check_assignable(sem_context_t* context, DataType target, ASTNode** expr_ptr);
+static void sem_check_condition(sem_context_t* context, ASTNode* cond);
+
+static void sem_return(sem_context_t* context, ASTNode* node);
+static DataType sem_block_result(sem_context_t* context, ASTNode* block);
+static void sem_check_function_result(sem_context_t* context, sym_data_t* func);
+static void sem_ensure_function_analyzed(symtable_t* functions, sym_data_t* func);
 
 static void scope_push(sem_context_t* context);
 static void scope_pop(sem_context_t* context);
@@ -39,7 +86,7 @@ int sem_analyze(ASTNode* tree, symtable_t* functions) {
 	return 0;
 }
 
-void sem_analyze_function(symtable_t* functions, ASTNode* func_def) {
+static void sem_analyze_function(symtable_t* functions, ASTNode* func_def) {
 	sym_data_t* func = symtable_search(functions, func_def->as.func_def.name);
 
 	sem_context_t context;
@@ -123,7 +170,7 @@ static char* sem_unique_name(sem_context_t* context, const char* name) {
 	return buffer;
 }
 
-void sem_error(int err_code, const char* err_msg) {
+static void sem_error(int err_code, const char* err_msg) {
 	fprintf(stderr, "%s\n", err_msg);
 	exit(err_code);
 }
@@ -183,7 +230,7 @@ static void sem_statement(sem_context_t* context, ASTNode* current) {
 	}
 }
 
-DataType sem_identifier(sem_context_t* context, ASTNode* node) {
+static DataType sem_identifier(sem_context_t* context, ASTNode* node) {
 	sym_data_t* var = scope_lookup(context, node->as.identifier.name);
 	if (var == NULL) {
 		sem_error(3, "Variable not defined");
@@ -300,7 +347,7 @@ void sem_register_builtins(symtable_t* symtable) {
 	sem_add_builtin(symtable, "readBoolean", TYPE_BOOL, 0, NULL);
 }
 
-DataType sem_call(sem_context_t* context, ASTNode* node) {
+static DataType sem_call(sem_context_t* context, ASTNode* node) {
 	sym_data_t* func = symtable_search(context->functions, node->as.func_call.name);
 	if (func == NULL) {
 		sem_error(3, "Function not defined");
@@ -334,7 +381,7 @@ DataType sem_call(sem_context_t* context, ASTNode* node) {
 	return func->as.func.return_type;
 }
 
-void sem_insert_conversion(ASTNode** subnode_ptr) {
+static void sem_insert_conversion(ASTNode** subnode_ptr) {
 	if (subnode_ptr == NULL || *subnode_ptr == NULL) return;
 
 	ASTNode* orig = *subnode_ptr;
@@ -356,7 +403,7 @@ void sem_insert_conversion(ASTNode** subnode_ptr) {
 	*subnode_ptr = conv;
 }
 
-bool sem_types_compatible(DataType target, DataType source) {
+static bool sem_types_compatible(DataType target, DataType source) {
 	if (target == TYPE_ANY) {
 		return true;
 	}
@@ -369,7 +416,7 @@ bool sem_types_compatible(DataType target, DataType source) {
 	return false;
 }
 
-void sem_check_assignable(sem_context_t* context, DataType target, ASTNode** expr_ptr) {
+static void sem_check_assignable(sem_context_t* context, DataType target, ASTNode** expr_ptr) {
 	(void)context;
 	DataType source = (*expr_ptr)->data_type;
 
@@ -381,7 +428,7 @@ void sem_check_assignable(sem_context_t* context, DataType target, ASTNode** exp
 	}
 }
 
-DataType sem_expr_type(sem_context_t* context, ASTNode* node) {
+static DataType sem_expr_type(sem_context_t* context, ASTNode* node) {
 	if (node == NULL) {
 		sem_error(99, "NULL expression node");
 	}
@@ -395,7 +442,7 @@ DataType sem_expr_type(sem_context_t* context, ASTNode* node) {
 		case LIT_DOUBLE: result_type = TYPE_DOUBLE; break;
 		case LIT_STRING: result_type = TYPE_STRING; break;
 		case LIT_UNIT:   result_type = TYPE_UNIT; break;
-		case LIT_BOOL:   result_type = TYPE_BOOL; break; // mozna budouci zmena podle ast definice
+		case LIT_BOOL:   result_type = TYPE_BOOL; break;
 		default:         sem_error(99, "Unknown literal type");
 		}
 		break;
@@ -436,7 +483,7 @@ DataType sem_expr_type(sem_context_t* context, ASTNode* node) {
 	return result_type;
 }
 
-DataType sem_unary_op(sem_context_t* context, ASTNode* node) {
+static DataType sem_unary_op(sem_context_t* context, ASTNode* node) {
 	DataType operand_type = sem_expr_type(context, node->as.op.left);
 	const char* op = node->as.op.op;
 
@@ -460,7 +507,7 @@ DataType sem_unary_op(sem_context_t* context, ASTNode* node) {
 	return TYPE_UNKNOWN;
 }
 
-DataType sem_binary_op(sem_context_t* context, ASTNode* node) {
+static DataType sem_binary_op(sem_context_t* context, ASTNode* node) {
 	DataType left_t = sem_expr_type(context, node->as.op.left);
 	DataType right_t = sem_expr_type(context, node->as.op.right);
 	const char* op = node->as.op.op;
@@ -561,14 +608,14 @@ DataType sem_binary_op(sem_context_t* context, ASTNode* node) {
 	return TYPE_UNKNOWN;
 }
 
-void sem_check_condition(sem_context_t* context, ASTNode* cond) {
+static void sem_check_condition(sem_context_t* context, ASTNode* cond) {
 	DataType cond_type = sem_expr_type(context, cond);
 	if (cond_type != TYPE_BOOL) {
 		sem_error(6, "Condition in if/while must be a relational expression of type Boolean");
 	}
 }
 
-void sem_return(sem_context_t* context, ASTNode* node) {
+static void sem_return(sem_context_t* context, ASTNode* node) {
 	if (context->curr_func == NULL) {
 		sem_error(99, "Return statement outside of function context");
 	}
@@ -593,7 +640,7 @@ void sem_return(sem_context_t* context, ASTNode* node) {
 	}
 }
 
-DataType sem_block_result(sem_context_t* context, ASTNode* block) {
+static DataType sem_block_result(sem_context_t* context, ASTNode* block) {
 	if (block == NULL) {
 		return TYPE_UNIT;
 	}
@@ -688,7 +735,7 @@ static void convert_block_tail_to_double(ASTNode** body_ptr) {
 	body->as.list.tail = *curr_ptr;
 }
 
-void sem_check_function_result(sem_context_t* context, sym_data_t* func) {
+static void sem_check_function_result(sem_context_t* context, sym_data_t* func) {
 	ASTNode* body = func->as.func.definition->as.func_def.body;
 	DataType body_res = sem_block_result(context, body);
 
@@ -717,7 +764,7 @@ void sem_check_function_result(sem_context_t* context, sym_data_t* func) {
 	}
 }
 
-void sem_ensure_function_analyzed(symtable_t* functions, sym_data_t* func) {
+static void sem_ensure_function_analyzed(symtable_t* functions, sym_data_t* func) {
 	if (func == NULL) return;
 
 	if (func->as.func.state == FUNC_DONE) {

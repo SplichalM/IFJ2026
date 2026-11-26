@@ -25,9 +25,9 @@ $(TARGET): $(SOURCES) $(HEADERS)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(SOURCES) -o $@
 
 clean:
-ifeq ($(OS),Windows_NT)
+ifneq ($(filter %cmd %cmd.exe,$(subst \,/,$(SHELL))),)
 	if exist "$(TARGET)" del /Q "$(TARGET)"
 	if exist "$(TARGET).exe" del /Q "$(TARGET).exe"
 else
-	$(RM) $(TARGET)
+	$(RM) "$(TARGET)" "$(TARGET).exe"
 endif

@@ -447,11 +447,7 @@ FodyWeavers.xsd
 # Local trial submission archive
 /xpospij01.zip
 /xpospij01.zip.tmp
-# Local submission files and tools (not ready to commit)
-/.gitattributes
-/dokumentace.pdf
-/rozdeleni
-/rozsireni
-/tools/Dockerfile
+
+# Local school validation tools
 /tools/is_it_ok.sh
-/tools/package.py
+/tools/Dockerfile

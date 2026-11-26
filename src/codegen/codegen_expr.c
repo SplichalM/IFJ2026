@@ -26,6 +26,9 @@ void gen_expr(ASTNode* node) {
     switch (node->type) {
         case NODE_LITERAL:
             switch (node->as.literal.type) {
+                case LIT_BOOL:
+                    printf("PUSHS bool@%s\n", node->as.literal.val.b_val ? "true" : "false");
+                    break;
                 case LIT_INT:
                     printf("PUSHS int@%d\n", node->as.literal.val.i_val);
                     break;
@@ -56,6 +59,30 @@ void gen_expr(ASTNode* node) {
             break;
         
         case NODE_BINARY_OP:
+            if (strcmp(node->as.op.op, "&&") == 0) {
+                unsigned int lbl = gen_new_label();
+                gen_expr(node->as.op.left);
+                puts("POPS GF@%tmp1");
+                printf("JUMPIFEQ $and$%u$false GF@%%tmp1 bool@false\n", lbl);
+                gen_expr(node->as.op.right);
+                printf("JUMP $and$%u$end\n", lbl);
+                printf("LABEL $and$%u$false\n", lbl);
+                puts("PUSHS bool@false");
+                printf("LABEL $and$%u$end\n", lbl);
+                break;
+            }
+             if (strcmp(node->as.op.op, "||") == 0) {
+                unsigned int lbl = gen_new_label();
+                gen_expr(node->as.op.left);
+                puts("POPS GF@%tmp1");
+                printf("JUMPIFEQ $or$%u$true GF@%%tmp1 bool@true\n", lbl);
+                gen_expr(node->as.op.right);
+                printf("JUMP $or$%u$end\n", lbl);
+                printf("LABEL $or$%u$true\n", lbl);
+                puts("PUSHS bool@true");
+                printf("LABEL $or$%u$end\n", lbl);
+                break;
+            }
             gen_expr(node->as.op.left);
             gen_expr(node->as.op.right);
             
@@ -109,6 +136,9 @@ void gen_expr(ASTNode* node) {
                 printf("SUBS\n");
             } else if (strcmp(node->as.op.op, "+") == 0) {
                 gen_expr(node->as.op.left);
+            } else if (strcmp(node->as.op.op, "!") == 0) {
+                gen_expr(node->as.op.left);
+                puts("NOTS");
             }
             break;
 
@@ -141,6 +171,14 @@ void gen_expr(ASTNode* node) {
                 puts("STRLEN GF@%tmp2 GF@%tmp1");
                 puts("PUSHS GF@%tmp2");
             }
+            else if (strcmp(func_name, "readBoolean") == 0) {
+                unsigned int lbl = gen_new_label();
+                puts("READ GF@%tmp1 bool");
+                printf("JUMPIFNEQ $read_bool$%u$ok GF@%%tmp1 nil@nil\n", lbl);
+                puts("MOVE GF@%tmp1 bool@false");
+                printf("LABEL $read_bool$%u$ok\n", lbl);
+                puts("PUSHS GF@%tmp1");
+            }
             else if (strcmp(func_name, "chr") == 0) {
                 puts("INT2CHARS");
             }
@@ -170,6 +208,55 @@ void gen_expr(ASTNode* node) {
             }
             break;
         }
+
+    case NODE_MEMBER: {
+        ASTNode* recv = node->as.member.receiver;
+        const char* name = node->as.member.name;
+
+        gen_expr(recv);
+
+        if (strcmp(name, "toInt") == 0) {
+            puts("FLOAT2INTS");
+        } else if (strcmp(name, "length") == 0) {
+            puts("POPS GF@%tmp1");
+            puts("STRLEN GF@%tmp2 GF@%tmp1");
+            puts("PUSHS GF@%tmp2");
+        } else if (strcmp(name, "floor") == 0) {
+            unsigned int lbl = gen_new_label();
+            puts("POPS GF@%tmp1");
+            puts("FLOAT2INT GF@%tmp2 GF@%tmp1");
+            puts("INT2FLOAT GF@%tmp2 GF@%tmp2");
+            puts("LT GF@%tmp3 GF@%tmp1 GF@%tmp2");
+            printf("JUMPIFNEQ $floor$%u$ok GF@%%tmp3 bool@true\n", lbl);
+            puts("SUB GF@%tmp2 GF@%tmp2 float@0x1p+0");
+            printf("LABEL $floor$%u$ok\n", lbl);
+            puts("PUSHS GF@%tmp2");
+        } else if (strcmp(name, "toString") == 0) {
+            if (recv->data_type == TYPE_INT) {
+                puts("INT2STRS");
+            } else if (recv->data_type == TYPE_DOUBLE) {
+                puts("FLOAT2STRS");
+            } else if (recv->data_type == TYPE_UNIT) {
+                puts("POPS GF@%trash");
+                puts("PUSHS string@()");
+            } else if (recv->data_type == TYPE_BOOL) {
+                unsigned int lbl = gen_new_label();
+                puts("POPS GF@%tmp1");
+                printf("JUMPIFEQ $b2s$%u$true GF@%%tmp1 bool@true\n", lbl);
+                puts("PUSHS string@false");
+                printf("JUMP $b2s$%u$end\n", lbl);
+                printf("LABEL $b2s$%u$true\n", lbl);
+                puts("PUSHS string@true");
+                printf("LABEL $b2s$%u$end\n", lbl);
+                }
+            }
+        }
+        break;
+    
+        
+        case NODE_IF_EXPR:
+            gen_if_expr(node);
+            break;
 
         default:
             fprintf(stderr, "Chyba generátoru: Neznamy uzel ve vyrazu\n");
