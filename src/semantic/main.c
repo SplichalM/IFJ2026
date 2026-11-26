@@ -6,7 +6,7 @@
  *
  * Autoři:
  * Tomáš Schablický (xschabt00)
- * Azíz Hammadi ()
+ * Azíz Hammadi (xhammaa00)
  */
 
 #include "semantic.h"
@@ -34,8 +34,9 @@ static void sem_analyze_function(symtable_t* functions, ASTNode* func_def);
 static DataType sem_identifier(sem_context_t* context, ASTNode* node);
 static DataType sem_call(sem_context_t* context, ASTNode* node);
 
+/* Rekurzivne vyhodnoti datovy typ vyrazu, ulozi ho do node->data_type a vrati ho. */
 static DataType sem_expr_type(sem_context_t* context, ASTNode* node);
-static DataType sem_binary_op(sem_context_t* context, ASTNode* node);
+static DataType sem_binary_op(sem_context_t* context, ASTNode* node);/* Zkontroluje typy operandu binarniho operatoru a pri kombinaci Int/Double vlozi konverzi na Int operand. */
 static DataType sem_unary_op(sem_context_t* context, ASTNode* node);
 static void sem_insert_conversion(ASTNode** subnode_ptr);
 static bool sem_types_compatible(DataType target, DataType source);
@@ -65,7 +66,7 @@ static char* sem_copy_name(const char* name);
 
 static DataType sem_member(sem_context_t* context, ASTNode* node);
 static DataType sem_if_expr(sem_context_t* context, ASTNode* node);
-static void convert_block_tail_to_double(ASTNode** body_ptr);
+static void convert_block_tail_to_double(ASTNode** body_ptr);/* Najde posledni prikaz v bloku (tail), obali ho konverzi na Double a aktualizuje ukazatel list.tail. */
 static void sem_for(sem_context_t* context, ASTNode* node);
 
 
