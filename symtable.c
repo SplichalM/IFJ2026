@@ -6,7 +6,7 @@
  *
  * Autoři:
  * Tomáš Schablický (xschabt00)
- * Azíz Hammadi ()
+ * Azíz Hammadi (xhammaa00)
  */
 
 #include "symtable.h"
@@ -134,10 +134,12 @@ static symtable_node_t* insert_rec(symtable_node_t* root, const char* key, sym_t
 	return root;
 }
 
+/* Inicializuje prazdnou tabulku symbolu*/
 void symtable_init(symtable_t* symtable) {
 	symtable->root = NULL;
 }
 
+/* Vlozi novy symbol pod zadanym klicem a vyvazi strom; pri duplicite vraci NULL, jinak ukazatel na data. */
 sym_data_t* symtable_insert(symtable_t* symtable, const char* key, sym_type_t type) {
 	if (symtable == NULL || key == NULL) return NULL;
 	sym_data_t* result = NULL;

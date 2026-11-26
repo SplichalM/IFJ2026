@@ -3,7 +3,7 @@
 #include "codegen_expr.h"
 #include "builtins_p.h"
 
-
+/* Vlozi retezcovy literal na zasobnik a prevede problematicke znaky (<=32, #, \) na escape sekvence \xyz. */
 static void gen_push_string(const char* str) {
     printf("PUSHS string@");
     if (str != NULL) {
@@ -216,7 +216,9 @@ void gen_expr(ASTNode* node) {
         gen_expr(recv);
 
         if (strcmp(name, "toInt") == 0) {
-            puts("FLOAT2INTS");
+            if (recv->data_type == TYPE_DOUBLE) {
+                puts("FLOAT2INTS");
+            }
         } else if (strcmp(name, "length") == 0) {
             puts("POPS GF@%tmp1");
             puts("STRLEN GF@%tmp2 GF@%tmp1");
