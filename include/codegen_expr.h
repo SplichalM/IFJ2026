@@ -1,7 +1,7 @@
 /**
  * Projekt: Implementace překladače imperativního jazyka IFJ26
  *
- * Soubor: codegen_expr.h (semantic)
+ * Soubor: codegen_expr.h
  * Popis: Hlavičkový soubor generátoru výrazů: rozhraní pro překlad výrazů na zásobníku a generování pomocných vestavěných funkci
  * Autor:
  * Azíz Hammadi (xhammaa00)

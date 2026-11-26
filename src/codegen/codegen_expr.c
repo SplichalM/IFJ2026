@@ -1,7 +1,7 @@
 /**
  * Projekt: Implementace překladače imperativního jazyka IFJ26
  *
- * Soubor: codegen_expr.c (semantic)
+ * Soubor: codegen_expr.c
  * Popis: Generování kódu pro výrazy: vyhodnocování na zásobníku, operátory, volání funkcí a vestavěné pomocné funkce
  *
  * Autor:
