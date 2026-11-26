@@ -1,3 +1,15 @@
+/**
+ * Projekt: Implementace překladače imperativního jazyka IFJ26
+ *
+ * Soubor: codegen_expr.c (semantic)
+ * Popis: Generování kódu pro výrazy: vyhodnocování na zásobníku, operátory, volání funkcí a vestavěné pomocné funkce
+ *
+ * Autor:
+ * Azíz Hammadi (xhammaa00)
+ */
+
+
+
 #include <stdio.h>
 #include <string.h>
 #include "codegen_expr.h"

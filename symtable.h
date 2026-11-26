@@ -6,7 +6,7 @@
  *
  * Autoři:
  * Tomáš Schablický (xschabt00)
- * Azíz Hammadi ()
+ * Azíz Hammadi (xhammaa00)
  */
 
 #ifndef SYMTABLE_H
