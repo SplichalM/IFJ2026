@@ -1,7 +1,7 @@
 /**
  * Projekt: Implementace překladače imperativního jazyka IFJ26
  *
- * Soubor: main.c (semantic)
+ * Soubor: semantic.c
  * Popis: Sémantická analýza: kontrola typů, rozsahů platnosti a volání funkcí, vkládání implicitních konverzí
  *
  * Autoři:
@@ -29,7 +29,7 @@ typedef struct sem_context_t {
 	unsigned int count;
 } sem_context_t;
 
-static void sem_error(int err_code, const char* err_msg); // Pomocná funkce pro vracení error kódů
+static void sem_error(int err_code, const char* err_msg);
 static void sem_analyze_function(symtable_t* functions, ASTNode* func_def);
 static DataType sem_identifier(sem_context_t* context, ASTNode* node);
 static DataType sem_call(sem_context_t* context, ASTNode* node);
@@ -70,6 +70,8 @@ static void convert_block_tail_to_double(ASTNode** body_ptr);/* Najde posledni p
 static void sem_for(sem_context_t* context, ASTNode* node);
 
 
+// Vstupní funkce pro sémantickou analýzu
+// Prochází všechny funkce v AST a volá kontrolu main funkce, potom že main funkce vrací typ Unit
 int sem_analyze(ASTNode* tree, symtable_t* functions) {
 	ASTNode* main_func = sem_check_main(tree);
 	ASTNode* current = tree->as.list.head;
@@ -87,6 +89,7 @@ int sem_analyze(ASTNode* tree, symtable_t* functions) {
 	return 0;
 }
 
+// Kontrola funkce a vytvoření kontextu pro většinu dalších funkcí
 static void sem_analyze_function(symtable_t* functions, ASTNode* func_def) {
 	sym_data_t* func = symtable_search(functions, func_def->as.func_def.name);
 
@@ -98,17 +101,21 @@ static void sem_analyze_function(symtable_t* functions, ASTNode* func_def) {
 
 	scope_push(&context);
 
+	// Deklarace parametrů funkce a vytvoření jejich unikátních jmen
 	ASTNode* current = func_def->as.func_def.params->as.list.head;
 	while (current != NULL) {
 		sym_data_t* var = scope_declare(&context, current->as.func_param.name, current->as.func_param.param_type, false);
 		current->unique_name = sem_copy_name(var->as.var.unique_name);
 		current = current->next;
 	}
+
+	// Další kontroly
 	sem_block(&context, func_def->as.func_def.body);
 	sem_check_function_result(&context, func);
 	scope_pop(&context);
 }
 
+// Kontrola bloku
 static void sem_block(sem_context_t* context, ASTNode* block) {
 	scope_push(context);
 	ASTNode* current = block->as.list.head;
@@ -119,6 +126,8 @@ static void sem_block(sem_context_t* context, ASTNode* block) {
 	scope_pop(context);
 }
 
+// Funkce pro přidání prvku na vrchol zásobníku
+// Slouží na uchování proměnných v daném rozsahu
 static void scope_push(sem_context_t* context) {
 	sem_scope_t* scope = malloc(sizeof(sem_scope_t));
 	if (scope == NULL) {
@@ -130,6 +139,7 @@ static void scope_push(sem_context_t* context) {
 	context->top = scope;
 }
 
+// Funkce pro smazání vrchního prvku ze zásobníku a uvolnění paměti
 static void scope_pop(sem_context_t* context) {
 	if (context->top == NULL) {
 		sem_error(99, "Could not pop top of stack (semantic)");
@@ -140,6 +150,7 @@ static void scope_pop(sem_context_t* context) {
 	free(old);
 }
 
+// Funkce pro hledání proměnné na zásobníku dle jejího jména
 static sym_data_t* scope_lookup(sem_context_t* context, const char* key) {
 	sem_scope_t* current = context->top;
 	sym_data_t* result = NULL;
@@ -149,6 +160,7 @@ static sym_data_t* scope_lookup(sem_context_t* context, const char* key) {
 	return result;
 }
 
+// Funkce pro deklaraci proměnné na zásobník, zapíše její vlastnosti a nechá vytvořit unikátní jméno
 static sym_data_t* scope_declare(sem_context_t* context, const char* key, DataType type, bool is_mutable) {
 	sym_data_t* var = symtable_insert(&context->top->vars, key, SYM_LOCAL_VAR);
 	if (var == NULL) {
@@ -160,6 +172,7 @@ static sym_data_t* scope_declare(sem_context_t* context, const char* key, DataTy
 	return var;
 }
 
+// Funkce pro vytviření unikátního jména pro proměnnou
 static char* sem_unique_name(sem_context_t* context, const char* name) {
 	int length = snprintf(NULL, 0, "%s$%u", name, context->count);
 	char* buffer = malloc(sizeof(char) * (length + 1));
@@ -171,11 +184,15 @@ static char* sem_unique_name(sem_context_t* context, const char* name) {
 	return buffer;
 }
 
+// Pomocná funkce pro vypsání chybové hlášky na stderr a ukončení programu s příslušným chybovým kódem
 static void sem_error(int err_code, const char* err_msg) {
 	fprintf(stderr, "%s\n", err_msg);
 	exit(err_code);
 }
 
+// Funkce pro kontrolu main funkce
+// Kontroluje zda je definovaná a to pouze jednou, že nemá parametry a že
+// její návratový typ je Unit nebo Unknown
 static ASTNode* sem_check_main(ASTNode* tree) {
 	ASTNode* current = tree->as.list.head;
 	int main_count = 0;
@@ -202,6 +219,7 @@ static ASTNode* sem_check_main(ASTNode* tree) {
 	return main_func;
 }
 
+// Rozbočovací funkce pro různé typy AST prvků
 static void sem_statement(sem_context_t* context, ASTNode* current) {
 	switch (current->type) {
 	case NODE_VAR_DECL:
@@ -231,6 +249,8 @@ static void sem_statement(sem_context_t* context, ASTNode* current) {
 	}
 }
 
+// Kontrola že proměnná existuje a následné připsání jejího unikátního jména do AST
+// Vrací datový typ proměnné
 static DataType sem_identifier(sem_context_t* context, ASTNode* node) {
 	sym_data_t* var = scope_lookup(context, node->as.identifier.name);
 	if (var == NULL) {
@@ -240,6 +260,8 @@ static DataType sem_identifier(sem_context_t* context, ASTNode* node) {
 	return var->as.var.var_type;
 }
 
+// Funkce zjistí typ výrazu, zkontroluje jestli je přiřaditelný a deklaruje jej
+// Unikátní jméno zapíše do AST
 static void sem_var_decl(sem_context_t* context, ASTNode* node) {
 	DataType var_type = sem_expr_type(context, node->as.var_decl.value);
 
@@ -251,6 +273,8 @@ static void sem_var_decl(sem_context_t* context, ASTNode* node) {
 	node->unique_name = sem_copy_name(var->as.var.unique_name);
 }
 
+// Funkce zkontroluje jestli proměnná existuje, jestli je možné do ní zapisovat a následně
+// zapíše její unikátní jméno do AST, poté ještě volá kontrolu typu a přiřaditelnosti
 static void sem_assign(sem_context_t* context, ASTNode* node) {
 	sym_data_t* var = scope_lookup(context, node->as.assign.target_name);
 	if (var == NULL) {
@@ -264,6 +288,8 @@ static void sem_assign(sem_context_t* context, ASTNode* node) {
 	sem_check_assignable(context, var->as.var.var_type, &node->as.assign.value);
 }
 
+// Zkontroluje podmínku, pak volá kontrolu "pak" bloku a pokud existuje
+// blok "jinak" tak volá i jeho kontrolu
 static void sem_if(sem_context_t* context, ASTNode* node) {
 	sem_check_condition(context, node->as.if_stmt.cond);
 	sem_block(context, node->as.if_stmt.then_block);
@@ -272,6 +298,7 @@ static void sem_if(sem_context_t* context, ASTNode* node) {
 	}
 }
 
+// Zkontroluje podmínku a volá kontrolu vnitřního bloku cyklu
 static void sem_while(sem_context_t* context, ASTNode* node) {
 	sem_check_condition(context, node->as.while_stmt.cond);
 	sem_block(context, node->as.while_stmt.body);
@@ -314,6 +341,7 @@ void register_user_function(symtable_t *functions, ASTNode *definition)
     }
 }
 
+// Pomocná funkce pro vkládání vestavěných funkcí
 static void sem_add_builtin(symtable_t* symtable, const char* name, DataType return_type, int param_count, const DataType* param_types) {
 	sym_data_t* func = symtable_insert(symtable, name, SYM_FUNCTION);
 	if (func == NULL) {
@@ -333,6 +361,7 @@ static void sem_add_builtin(symtable_t* symtable, const char* name, DataType ret
 	}
 }
 
+// Zaregistruje všechny vestavěné funkce, je volaná ještě před parsováním
 void sem_register_builtins(symtable_t* symtable) {
 	sem_add_builtin(symtable, "print", TYPE_UNIT, 1, (DataType[]) { TYPE_ANY });
 	sem_add_builtin(symtable, "readLine", TYPE_STRING, 0, NULL);
@@ -348,6 +377,8 @@ void sem_register_builtins(symtable_t* symtable) {
 	sem_add_builtin(symtable, "readBoolean", TYPE_BOOL, 0, NULL);
 }
 
+// Kontroluje existenci funkce, počet a typy parametrů, v případě nutnosti vkládá konverzi Int na Double
+// pokud je funkce bez explicitního typu, vynutí její analýzu, vrací návratový typ funkce
 static DataType sem_call(sem_context_t* context, ASTNode* node) {
 	sym_data_t* func = symtable_search(context->functions, node->as.func_call.name);
 	if (func == NULL) {
@@ -780,6 +811,7 @@ static void sem_ensure_function_analyzed(symtable_t* functions, sym_data_t* func
 	func->as.func.state = FUNC_DONE;
 }
 
+// Funkce alokuje paměť pro unikátní jméno pro AST, jelikož rozsah po analýze zanikne
 static char* sem_copy_name(const char* name) {
 	char* tmp = malloc((strlen(name) + 1) * sizeof(char));
 	if (tmp == NULL) {
@@ -789,6 +821,8 @@ static char* sem_copy_name(const char* name) {
 	return tmp;
 }
 
+// VALMEM
+// Kontrola typu podle členu, pokud neexistuje, ukončuje s kódem 3
 static DataType sem_member(sem_context_t* context, ASTNode* node) {
 	DataType recv = sem_expr_type(context, node->as.member.receiver);
 	const char* name = node->as.member.name;
@@ -823,6 +857,8 @@ static DataType sem_member(sem_context_t* context, ASTNode* node) {
 	return TYPE_UNKNOWN;
 }
 
+// CONTROL
+// Kontrola že "jinak" blok existuje a že typy obou if větví jsou stejné, popřípadě vloží Int na Double konverzi
 static DataType sem_if_expr(sem_context_t* context, ASTNode* node) {
 	sem_check_condition(context, node->as.if_stmt.cond);
 
@@ -853,6 +889,10 @@ static DataType sem_if_expr(sem_context_t* context, ASTNode* node) {
 	return TYPE_UNKNOWN;
 }
 
+// CONTROL
+// Kontrola že meze a krok jsou typu Int a že není krok literál 0
+// vytvoří unikátní jména pro mez a krok, řídicí proměnnou deklaruje do nového rozsahu
+// stráže musí být typu Boolean
 static void sem_for(sem_context_t* context, ASTNode* node) {
 	if (sem_expr_type(context, node->as.for_stmt.from) != TYPE_INT) {
 		sem_error(6, "From variable type not int");
