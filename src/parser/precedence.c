@@ -32,6 +32,25 @@ static const PrecedenceAction precedence_table[PREC_END + 1][PREC_END + 1] = {
 #undef X
 #undef A
 
+typedef struct ActiveExpression {
+    PrecedenceStack *stack;
+    struct ActiveExpression *previous;
+} ActiveExpression;
+
+static ActiveExpression *active_expression = NULL;
+
+void precedence_free_pending(void)
+{
+    while (active_expression != NULL) {
+        PrecedenceStack *stack = active_expression->stack;
+        for (size_t i = 0; i < stack->count; i++) {
+            ast_free(stack->items[i].node);
+        }
+        stack_free(stack);
+        active_expression = active_expression->previous;
+    }
+}
+
 // kontrola typu tokenu
 static bool token_is(const Token *token, TokenType type)
 {
@@ -202,10 +221,10 @@ static bool reduce_operand(PrecedenceStack *stack)
 }
 
 //složení levého a praveho výrazu do jednoho AST
-static void reduce_binary(PrecedenceStack *stack)
+static bool reduce_binary(PrecedenceStack *stack)
 {
     if(stack->count < 4){
-        exit(2);
+        return false;
     }
 
     StackItem right_item = stack->items[stack->count - 1];
@@ -214,11 +233,11 @@ static void reduce_binary(PrecedenceStack *stack)
     StackItem mark = stack->items[stack->count - 4];
 
     if(mark.symbol != PREC_MARKER || left_item.symbol != PREC_EXPRESSION ||right_item.symbol != PREC_EXPRESSION){
-        exit(2);
+        return false;
     }
 
     if(operator.symbol != PREC_ADD && operator.symbol != PREC_MULTIPLY && operator.symbol != PREC_RELATION && operator.symbol != PREC_EQUALITY && operator.symbol != PREC_AND && operator.symbol != PREC_OR){
-        exit(2);
+        return false;
     }
 
     ASTNode *new_node = ast_create_binary_op(operator.operator_text, left_item.node, right_item.node);
@@ -233,13 +252,14 @@ static void reduce_binary(PrecedenceStack *stack)
     new_item.node = new_node;
 
     stack_push(stack, new_item);
+    return true;
 }
 
 // odstranení závorek a ponechání výrazu
-static void reduce_parentheses(PrecedenceStack *stack)
+static bool reduce_parentheses(PrecedenceStack *stack)
 {
     if(stack->count < 4){
-        exit(2);
+        return false;
     }
 
     StackItem right_paren = stack->items[stack->count - 1];
@@ -248,7 +268,7 @@ static void reduce_parentheses(PrecedenceStack *stack)
     StackItem mark = stack->items[stack->count - 4];
 
     if(mark.symbol != PREC_MARKER || left_paren.symbol != PREC_LEFT_PAREN || right_paren.symbol != PREC_RIGHT_PAREN || expr_item.symbol != PREC_EXPRESSION){
-        exit(2);
+        return false;
     }
 
     stack_pop(stack); /*)*/
@@ -257,13 +277,14 @@ static void reduce_parentheses(PrecedenceStack *stack)
     stack_pop(stack); /*značka*/
 
     stack_push(stack, expr_item);
+    return true;
 }
 
 // vytviření unárního mínus
-static void reduce_unary(PrecedenceStack *stack)
+static bool reduce_unary(PrecedenceStack *stack)
 {
     if(stack->count < 3){
-        exit(2);
+        return false;
     }
 
     StackItem expression = stack->items[stack->count - 1];
@@ -271,7 +292,7 @@ static void reduce_unary(PrecedenceStack *stack)
     StackItem mark = stack->items[stack->count - 3];
 
     if(mark.symbol != PREC_MARKER || operator.symbol != PREC_UNARY || expression.symbol != PREC_EXPRESSION){
-        exit(2);
+        return false;
     }
 
     ASTNode *new_node = ast_create_unary_op(operator.operator_text, expression.node);
@@ -285,13 +306,14 @@ static void reduce_unary(PrecedenceStack *stack)
     new_item.node = new_node;
 
     stack_push(stack, new_item);
+    return true;
 }
 
 // nahrazení prázdných závorek Unitem 
-static void reduce_unit(PrecedenceStack *stack)
+static bool reduce_unit(PrecedenceStack *stack)
 {
     if (stack->count < 3) {
-        exit(2);
+        return false;
     }
 
     StackItem right_paren = stack->items[stack->count - 1];
@@ -301,7 +323,7 @@ static void reduce_unit(PrecedenceStack *stack)
     if (marker.symbol != PREC_MARKER ||
         left_paren.symbol != PREC_LEFT_PAREN ||
         right_paren.symbol != PREC_RIGHT_PAREN) {
-        exit(2);
+        return false;
     }
 
     stack_pop(stack);  /* ) */
@@ -313,6 +335,7 @@ static void reduce_unit(PrecedenceStack *stack)
     result.node = ast_create_literal_unit();
 
     stack_push(stack, result);
+    return true;
 }
 
 // zpracování redukce na zásobníku
@@ -337,15 +360,15 @@ static bool reduce(PrecedenceStack *stack)
         return reduce_operand(stack);
     } else if(lenght == 2){
         if (stack->items[marker_index + 1].symbol == PREC_LEFT_PAREN) {
-            reduce_unit(stack);
+            return reduce_unit(stack);
         } else {
-            reduce_unary(stack);
+            return reduce_unary(stack);
         }
     } else if(lenght == 3){
         if (stack->items[marker_index + 1].symbol == PREC_LEFT_PAREN) {
-            reduce_parentheses(stack);
+            return reduce_parentheses(stack);
         } else {
-            reduce_binary(stack);
+            return reduce_binary(stack);
         }
     } else {
         return false;
@@ -364,10 +387,12 @@ static PrecedenceAction precedence_action(PrecedenceSymbol stack_symbol, Precede
 }
 
 // zpracování výrazu s precedence tabulkou
-ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_t line_indent, bool (*starts_function_call)(void), ASTNode *(*parse_function_call)(void), ASTNode *(*parse_if_expression)(void), const char *const *stop_words)
+ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_t line_indent, bool (*starts_function_call)(void), void (*parse_function_call)(ASTNode **), void (*parse_if_expression)(ASTNode **), const char *const *stop_words)
 {
     PrecedenceStack stack;
     stack_init(&stack);
+    ActiveExpression active = {.stack = &stack, .previous = active_expression};
+    active_expression = &active;
 
     StackItem end = {0};
     end.symbol = PREC_END;
@@ -473,17 +498,20 @@ ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_
 
             StackItem item = {0};
 
-            if (is_function_call) {
+            if (is_function_call || is_if_expression) {
                 item.symbol = PREC_OPERAND;
-                item.node = parse_function_call();
-           } else if (is_if_expression) {
-                item.symbol = PREC_OPERAND;
-                item.node = parse_if_expression();
+                stack_push(&stack, item);
+                // Zásobník vlastní uzel už během načítání jeho obsahu.
+                ASTNode **destination = &stack.items[stack.count - 1].node;
+                if (is_function_call) {
+                    parse_function_call(destination);
+                } else {
+                    parse_if_expression(destination);
+                }
             } else {
                 item = create_stack_item(current, input_symbol);
+                stack_push(&stack, item);
             }
-
-            stack_push(&stack, item);
 
             if(input_symbol == PREC_LEFT_PAREN){
                 parenthesis_count++;
@@ -506,6 +534,7 @@ ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_
 
             ASTNode *result = stack.items[1].node;
             stack_free(&stack);
+            active_expression = active.previous;
             return result;
         }else{
             goto expression_error;
@@ -517,5 +546,6 @@ expression_error:
         ast_free(stack.items[i].node);
     }
     stack_free(&stack);
+    active_expression = active.previous;
     return NULL;
 }
