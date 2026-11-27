@@ -1,3 +1,4 @@
+// Autor: Jan Pospíšil (xpospij01)
 #include "ast.h"
 #include <stdlib.h>
 #include <string.h>

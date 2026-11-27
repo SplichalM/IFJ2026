@@ -1,3 +1,4 @@
+// Autor: Jan Pospíšil (xpospij01)
 #ifndef BUILTINS_P_H
 #define BUILTINS_P_H
 
