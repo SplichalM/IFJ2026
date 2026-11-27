@@ -4,8 +4,9 @@
  * Soubor: codegen_expr.c
  * Popis: Generování kódu pro výrazy: vyhodnocování na zásobníku, operátory, volání funkcí a vestavěné pomocné funkce
  *
- * Autor:
+ * Autoři:
  * Azíz Hammadi (xhammaa00)
+ * Martin Šplíchal (xsplicm00)
  */
 
 

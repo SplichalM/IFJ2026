@@ -1,3 +1,10 @@
+/*
+ * Projekt: Implementace překladače imperativního jazyka IFJ26
+ * Soubor: lexer.h
+ * Autor: Martin Šplíchal (xsplicm00)
+ * Rozhraní lexeru a údaje tokenu
+ */
+
 #ifndef LEXER_H
 #define LEXER_H
 
@@ -27,9 +34,16 @@ typedef struct {
 	size_t length;              // Delka tokenu
 } Token;
 
+// Načte vstup.
 int lexer_init(void);
+
+// Vrátí další token a posune se ve vstupu.
 Token lexer_next(void);
+
+// Vrátí další token bez posunu ve vstupu.
 Token lexer_peek(void);
+
+// Uvolní načtený vstup.
 void lexer_free(void);
 
 #endif

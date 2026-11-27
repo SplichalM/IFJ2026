@@ -1,3 +1,10 @@
+/*
+ * Projekt: Implementace překladače imperativního jazyka IFJ26
+ * Soubor: main.c
+ * Autor: Martin Šplíchal (xsplicm00)
+ * Načítání vstupu a rozpoznávání tokenů
+ */
+
 #include "lexer.h"
 
 #include <limits.h>
@@ -91,17 +98,20 @@ static Token lexer_internal_error(void) {
 }
 
 // Kontrola, zda znak muze byt zacatkem identifikatoru
+// Vrací 1, pokud může, jinak 0.
 static int is_identifier_start(char character) {
     return (character >= 'A' && character <= 'Z') ||
            (character >= 'a' && character <= 'z') || character == '_';
 }
 
 // Kontrola, zda znak muze byt soucasti identifikatoru, ale ne zacatkem
+// Vrací 1, pokud může, jinak 0.
 static int is_identifier_part(char character) {
     return is_identifier_start(character) || (character >= '0' && character <= '9');
 }
 
 // Kontrola, zda je kontext klicovym slovem
+// Vrací 1 pro klíčové slovo, jinak 0.
 static int is_keyword(const char *context) {
     static const char *const keywords[] = {
         "def", "do", "Double", "else", "for", "if", "import", "Int", "return",
@@ -116,6 +126,7 @@ static int is_keyword(const char *context) {
 }
 
 // Rozpozna Boolean, true a false
+// Upraví token a vrátí 1, jinak vrátí 0.
 static int check_bool_word(Token *token) {
     if (strcmp(token->context, "Boolean") == 0) {
         token->type = TOKEN_KEYWORD;
@@ -186,6 +197,7 @@ static Token read_identifier_or_keyword(void) {
 }
 
 // Kontrola, zda je kontext celym cislem
+// Při rozpoznání vyplní token a vrátí 1, jinak 0.
 static int is_integer(Token *token) {
     size_t start = lexer.position;
     size_t end = start;
@@ -258,6 +270,7 @@ static int is_integer(Token *token) {
 }
 
 // Kontrola, zda je kontext desetinym cislem
+// Při rozpoznání vyplní token a vrátí 1, jinak 0.
 static int is_float(Token *token) {
     size_t start = lexer.position;
     size_t end = start;
@@ -381,6 +394,7 @@ static int is_float(Token *token) {
 }
 
 // Kontrola zda je viceradkovy retezec ("""...""")
+// Při rozpoznání vyplní token a vrátí 1, jinak 0.
 static int is_multiline_string(Token *token) {
     size_t start = lexer.position;
     if (lexer.length - start < 3 || memcmp(lexer.input + start, "\"\"\"", 3) != 0) {
@@ -433,6 +447,7 @@ static int is_multiline_string(Token *token) {
 }
 
 // Kontrola, zda jejednoradkovy retezec ("...")
+// Při rozpoznání vyplní token a vrátí 1, jinak 0.
 static int is_line_string(Token *token) {
     size_t start = lexer.position;
     if (lexer.input[start] != '"') {
@@ -498,6 +513,7 @@ static int is_line_string(Token *token) {
 }
 
 // Rozpozna boolean operatory (&&, ||, !)
+// Vrátí délku operátoru nebo 0.
 static size_t check_bool_operator(char first, char next) {
     if (first == '!') {
         if (next == '=') {
@@ -512,11 +528,13 @@ static size_t check_bool_operator(char first, char next) {
 }
 
 // Rozpozna kontrolni sipku (<-)
+// Vrací 1 pro šipku, jinak 0.
 static int is_control_arrow(char first, char next) {
     return first == '<' && next == '-';
 }
 
 // Kontrola, zda je znak operatorem
+// Při rozpoznání vyplní token a vrátí 1, jinak 0.
 static int is_operator(Token *token) {
     size_t start = lexer.position;
     char first = lexer.input[start];
@@ -571,6 +589,7 @@ static int is_operator(Token *token) {
 }
 
 // Kontrola, zda je znak oddelovac
+// Při rozpoznání vyplní token a vrátí 1, jinak 0.
 static int is_separator(Token *token) {
     size_t start = lexer.position;
     char first = lexer.input[start];
@@ -610,6 +629,7 @@ static int is_separator(Token *token) {
 }
 
 // Kontrola, zda je znak anotace (@main)
+// Při rozpoznání vyplní token a vrátí 1, jinak 0.
 static int is_annotation(Token *token) {
     static const char annotation[] = "@main";
     size_t start = lexer.position;
@@ -662,6 +682,7 @@ static int is_annotation(Token *token) {
 
 
 // Jednoradkove komentare (//)
+// Vrátí 0 bez komentáře, 1 s tokenem nebo 2 pro další čtení.
 static int is_line_comment(Token *token) {
     size_t start = lexer.position;
     if (lexer.length - start < 2) {
@@ -688,6 +709,7 @@ static int is_line_comment(Token *token) {
 }
 
 // Blokove komentare (/* */)
+// Vrátí 0 bez komentáře, 1 s tokenem nebo 2 pro další čtení.
 static int is_block_comment(Token *token) {
     size_t start = lexer.position;
     if (lexer.length - start < 2) {
