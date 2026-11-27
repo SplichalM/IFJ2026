@@ -1,3 +1,4 @@
+// Autor: Jan Pospíšil (xpospij01)
 #include "precedence.h"
 #include "stack.h"
 #include "lexer.h"

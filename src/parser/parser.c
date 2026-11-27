@@ -1,5 +1,4 @@
 // Autor: Jan Pospíšil (xpospij01)
-
 #include "parser.h"
 #include "lexer.h"
 #include <stdbool.h>

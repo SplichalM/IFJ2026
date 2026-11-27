@@ -1,136 +1,123 @@
 #!/usr/bin/env python3
-"""Create the flat ZIP layout required for IFJ26 submission.
-
-AI assistance. User request: prepare the first trial submission archive
-according to the assignment and check its required files.
-"""
-
 import argparse
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import tempfile
 import zipfile
 
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCES = {
-    "src/main.c": "src/main.c",
-    "src/lexer/main.c": "src/lexer.c",
-    "src/parser/parser.c": "src/parser.c",
-    "src/parser/precedence.c": "src/precedence.c",
-    "src/parser/stack.c": "src/stack.c",
-    "src/parser/ast.c": "src/ast.c",
-    "src/semantic/main.c": "src/semantic.c",
-    "src/codegen/main.c": "src/codegen.c",
-    "src/codegen/codegen_expr.c": "src/codegen_expr.c",
-    "src/codegen/builtins_p.c": "src/builtins_p.c",
-    "symtable.c": "src/symtable.c",
-    "symtable.h": "src/symtable.h",
+RENAMED = {
+    'src/lexer/main.c': 'lexer.c',
+    'src/semantic/main.c': 'semantic.c',
+    'src/codegen/main.c': 'codegen.c',
 }
 
-MAKEFILE = """# IFJ26 compiler submission build.
-# AI assistance prompt: prepare a flat submission archive with a working Makefile.
-CC = gcc
-CPPFLAGS = -Isrc
-CFLAGS = -std=gnu11 -Wall -Wextra -pedantic -O2
 
-SOURCES = $(wildcard src/*.c)
-HEADERS = $(wildcard src/*.h)
-TARGET = ifj26
+def source_mapping():
+    sources = sorted((ROOT / 'src').rglob('*.c'))
+    sources += sorted((ROOT / 'src').rglob('*.h'))
+    sources += sorted((ROOT / 'include').rglob('*.h'))
+    sources += sorted(ROOT.glob('*.c'))
+    sources += sorted(ROOT.glob('*.h'))
+    mapping = {}
+    destinations = set()
+    for source in sources:
+        relative = source.relative_to(ROOT).as_posix()
+        destination = 'src/' + RENAMED.get(relative, source.name)
+        if destination.lower() in destinations:
+            raise ValueError('archive filename collision: ' + destination)
+        destinations.add(destination.lower())
+        mapping[relative] = destination
+    if not mapping:
+        raise ValueError('no source files found')
+    return mapping
 
-.PHONY: all clean
-all: $(TARGET)
 
-$(TARGET): $(SOURCES) $(HEADERS)
-\t$(CC) $(CPPFLAGS) $(CFLAGS) $(SOURCES) -o $@
-
-clean:
-\t$(RM) $(TARGET) $(TARGET).exe
-"""
+def archive_makefile(mapping):
+    content = (ROOT / 'Makefile').read_text(encoding='utf-8-sig')
+    # Expand source wildcards before flattening their paths.
+    def expand(match):
+        pattern = match.group(1).strip()
+        if pattern.startswith('src/'):
+            return ' '.join(mapping[path.relative_to(ROOT).as_posix()]
+                            for path in sorted(ROOT.glob(pattern)))
+        return match.group(0)
+    content = re.sub(r'\$\(wildcard\s+([^()]+)\)', expand, content)
+    # Replace each original path once, without replacing generated paths again.
+    pattern = r'(?<![A-Za-z0-9_./-])(?:' + '|'.join(
+        re.escape(path) for path in sorted(mapping, key=len, reverse=True)
+    ) + r')(?![A-Za-z0-9_./-])'
+    content = re.sub(pattern, lambda match: mapping[match.group(0)], content)
+    content = content.replace('-Iinclude', '-Isrc')
+    content = content.replace('$(wildcard include/*.h)', '$(wildcard src/*.h)')
+    return content.encode('utf-8')
 
 
 def validate_distribution(path):
-    """Require LF-terminated student ID, login and percentage records."""
     raw = path.read_bytes()
-    if b"\r" in raw or not raw.endswith(b"\n"):
-        raise ValueError("rozdeleni must use LF and end with LF")
-    records = raw.decode("utf-8").splitlines()
-    pattern = re.compile(r"([0-9]+):(x[a-z0-9]+):([0-9]{1,3})")
+    if b'\r' in raw or not raw.endswith(b'\n'):
+        raise ValueError('rozdeleni must use LF and end with LF')
+    records = raw.decode('utf-8').splitlines()
+    pattern = re.compile(r'([0-9]{5,7}):(x(?:[a-z]{5,6}[a-z0-9]{2}|[0-9]{5,7})):([0-9]{1,3})')
     matches = [pattern.fullmatch(record) for record in records]
     if len(records) not in (3, 4) or not all(matches):
-        raise ValueError("invalid rozdeleni records")
+        raise ValueError('invalid rozdeleni records')
     if sum(int(match[3]) for match in matches) != 100:
-        raise ValueError("rozdeleni percentages must add up to 100")
+        raise ValueError('rozdeleni percentages must add up to 100')
     for group in (1, 2):
         if len({match[group] for match in matches}) != len(records):
-            raise ValueError("duplicate student ID or login in rozdeleni")
+            raise ValueError('duplicate student ID or login in rozdeleni')
 
 
 def main():
-    """Build the ZIP atomically and report any missing required documents."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=ROOT / "xpospij01.zip")
-    parser.add_argument("--clang-format", help="Path to clang-format, using LLVM style")
+    parser.add_argument('--output', type=Path, default=ROOT / 'xpospij01.zip')
+    parser.add_argument('--clang-format', help='Optional path to clang-format')
     args = parser.parse_args()
+    mapping = source_mapping()
+    makefile = archive_makefile(mapping)
+    documents = ('dokumentace.pdf', 'rozdeleni', 'rozsireni')
+    missing = [name for name in documents if not (ROOT / name).is_file()]
+    if (ROOT / 'rozdeleni').is_file():
+        validate_distribution(ROOT / 'rozdeleni')
     output = args.output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
-    mapping = dict(SOURCES)
-    mapping.update(
-        (str(path.relative_to(ROOT)), "src/" + path.name)
-        for path in sorted((ROOT / "include").glob("*.h"))
-    )
-    if len(set(mapping.values())) != len(mapping):
-        raise ValueError("archive filename collision")
-
-    missing = [name for name in ("dokumentace.pdf", "rozdeleni", "rozsireni")
-               if not (ROOT / name).is_file()]
-    distribution = ROOT / "rozdeleni"
-    if distribution.is_file():
-        validate_distribution(distribution)
-
-    with tempfile.TemporaryDirectory(prefix="ifj26-package-") as directory:
-        stage = Path(directory)
-        for source, destination in mapping.items():
-            content = (ROOT / source).read_text(encoding="utf-8-sig")
-            if args.clang_format:
-                content = subprocess.run(
-                    [args.clang_format, "--style=LLVM",
-                     "--assume-filename=" + Path(destination).name],
-                    input=content, text=True, capture_output=True, check=True,
-                    encoding="utf-8",
-                ).stdout
-            target = stage / destination
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(content.replace("\r\n", "\n").encode("utf-8"))
-        (stage / "Makefile").write_bytes(MAKEFILE.encode("utf-8"))
-        for name in ("dokumentace.pdf", "rozdeleni", "rozsireni"):
-            source = ROOT / name
-            if source.is_file():
-                if name == "dokumentace.pdf" and not source.read_bytes().startswith(b"%PDF-"):
-                    raise ValueError("dokumentace.pdf has no PDF header")
-                shutil.copyfile(source, stage / name)
-
-        pending = output.with_name(output.name + ".tmp")
+    # Stage outside the repository; replace the output only after success.
+    with tempfile.TemporaryDirectory(prefix='ifj26-package-') as directory:
+        pending = Path(directory) / 'submission.zip'
+        with zipfile.ZipFile(pending, 'w', zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr('Makefile', makefile)
+            for source, destination in mapping.items():
+                content = (ROOT / source).read_text(encoding='utf-8-sig')
+                if args.clang_format:
+                    content = subprocess.run(
+                        [args.clang_format, '--style=LLVM', '--assume-filename=' + destination],
+                        input=content, text=True, capture_output=True, check=True, encoding='utf-8'
+                    ).stdout
+                archive.writestr(destination, content.encode('utf-8'))
+            for name in documents:
+                source = ROOT / name
+                if source.is_file():
+                    if name == 'dokumentace.pdf' and not source.read_bytes().startswith(b'%PDF-'):
+                        raise ValueError('dokumentace.pdf has no PDF header')
+                    archive.write(source, name)
+        # A temporary sibling allows replacement across different temp drives.
+        sibling = output.with_name(output.name + '.tmp')
         try:
-            with zipfile.ZipFile(pending, "w", zipfile.ZIP_DEFLATED) as archive:
-                for path in sorted(stage.rglob("*")):
-                    if path.is_file():
-                        archive.write(path, path.relative_to(stage).as_posix())
-            pending.replace(output)
+            sibling.write_bytes(pending.read_bytes())
+            sibling.replace(output)
         finally:
-            pending.unlink(missing_ok=True)
-
+            if sibling.exists():
+                sibling.unlink()
     print(output)
-    print(f"{len(mapping)} source files, flat src/ directory, LF line endings")
-    if args.clang_format:
-        print("Source files formatted with clang-format --style=LLVM")
+    print(str(len(mapping)) + ' source files; project Makefile with archive paths')
     if missing:
-        print("DRAFT - required files still missing: " + ", ".join(missing))
+        print('DRAFT - required files missing: ' + ', '.join(missing))
     else:
-        print("Required documents included; run the school is_it_ok.sh check")
+        print('Required documents included; run tools/is_it_ok.sh')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

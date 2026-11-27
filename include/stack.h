@@ -1,3 +1,4 @@
+// Autor: Jan Pospíšil (xpospij01)
 #ifndef STACK_H
 #define STACK_H
 

@@ -14,7 +14,7 @@ typedef enum {
     ACTION_ACCEPT
 } PrecedenceAction;
 
-// Token a funkce, přes které precedence spolupracuje s parserem.
+// token a funkce, přes které precedence spolupracuje s parserem.
 typedef struct {
     Token *current;
     int (*advance)(void);
