@@ -1,6 +1,6 @@
 /*
  * Projekt: Implementace překladače imperativního jazyka IFJ26
- * Soubor: main.c
+ * Soubor: lexer.c
  * Autor: Martin Šplíchal (xsplicm00)
  * Načítání vstupu a rozpoznávání tokenů
  */
