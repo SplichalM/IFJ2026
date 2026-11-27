@@ -14,6 +14,19 @@ typedef enum {
     ACTION_ACCEPT
 } PrecedenceAction;
 
-ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_t line_indent, bool (*starts_function_call)(void), void (*parse_function_call)(ASTNode **), void (*parse_if_expression)(ASTNode **), const char *const *stop_words);
+// Token a funkce, přes které precedence spolupracuje s parserem.
+typedef struct {
+    Token *current;
+    int (*advance)(void);
+    bool (*identifier_followed_by)(TokenType type, const char *text);
+    void (*parse_function_call)(ASTNode **);
+    void (*parse_if_expression)(ASTNode **);
+} ExpressionInput;
+
+ASTNode *parse_precedence_expression(
+    const ExpressionInput *input,
+    size_t line_indent,
+    const char *const *stop_words
+);
 void precedence_free_pending(void);
 #endif

@@ -32,6 +32,16 @@ static const PrecedenceAction precedence_table[PREC_END + 1][PREC_END + 1] = {
 #undef X
 #undef A
 
+// určení akce precedence tabulky
+static PrecedenceAction precedence_action(PrecedenceSymbol stack_symbol, PrecedenceSymbol input_symbol)
+{
+    if((unsigned)stack_symbol > PREC_END || (unsigned)input_symbol > PREC_END){
+        return ACTION_ERROR;
+    }
+
+    return precedence_table[stack_symbol][input_symbol];
+}
+
 typedef struct ActiveExpression {
     PrecedenceStack *stack;
     struct ActiveExpression *previous;
@@ -39,6 +49,7 @@ typedef struct ActiveExpression {
 
 static ActiveExpression *active_expression = NULL;
 
+// uvolnováni paměti
 void precedence_free_pending(void)
 {
     while (active_expression != NULL) {
@@ -61,9 +72,7 @@ static bool token_is(const Token *token, TokenType type)
 static bool token_text_is(const Token *token, const char *text)
 {
     size_t length = strlen(text);
-    return token->context != NULL
-        && token->length == length
-        && memcmp(token->context, text, length) == 0;
+    return token->context != NULL && token->length == length && memcmp(token->context, text, length) == 0;
 }
 
 // kontrola zda token odpovídá klíčovému slovu
@@ -72,7 +81,7 @@ static bool token_is_keyword(const Token *token, const char *keyword)
     return token_is(token, TOKEN_KEYWORD) && token_text_is(token, keyword);
 }
 
-// určení symbolu výrazu
+// převede token na skupinu symbolů pro precedenční tabulku
 static PrecedenceSymbol expression_symbol(const Token *token, bool expect_operand)
 {
     if (token_is(token, TOKEN_ERROR)) {
@@ -195,7 +204,7 @@ static StackItem create_stack_item(const Token *token, PrecedenceSymbol symbol)
     return item;
 }
 
-// označení na zásobníku jako htoový 
+// zredukuje operand se značkou na výraz a zachová jeho AST
 static bool reduce_operand(PrecedenceStack *stack)
 {
     if(stack->count < 2){
@@ -227,10 +236,10 @@ static bool reduce_binary(PrecedenceStack *stack)
         return false;
     }
 
-    StackItem right_item = stack->items[stack->count - 1];
-    StackItem operator = stack->items[stack->count - 2];
-    StackItem left_item = stack->items[stack->count - 3];
-    StackItem mark = stack->items[stack->count - 4];
+    StackItem right_item = stack->items[stack->count - 1]; /*pravý item*/
+    StackItem operator = stack->items[stack->count - 2]; /*op*/
+    StackItem left_item = stack->items[stack->count - 3]; /*levý item*/
+    StackItem mark = stack->items[stack->count - 4]; /*značka*/
 
     if(mark.symbol != PREC_MARKER || left_item.symbol != PREC_EXPRESSION ||right_item.symbol != PREC_EXPRESSION){
         return false;
@@ -262,10 +271,10 @@ static bool reduce_parentheses(PrecedenceStack *stack)
         return false;
     }
 
-    StackItem right_paren = stack->items[stack->count - 1];
-    StackItem expr_item = stack->items[stack->count - 2];
-    StackItem left_paren = stack->items[stack->count - 3];
-    StackItem mark = stack->items[stack->count - 4];
+    StackItem right_paren = stack->items[stack->count - 1]; /*)*/
+    StackItem expr_item = stack->items[stack->count - 2]; /*výraz*/
+    StackItem left_paren = stack->items[stack->count - 3]; /*(*/
+    StackItem mark = stack->items[stack->count - 4]; /*značka*/
 
     if(mark.symbol != PREC_MARKER || left_paren.symbol != PREC_LEFT_PAREN || right_paren.symbol != PREC_RIGHT_PAREN || expr_item.symbol != PREC_EXPRESSION){
         return false;
@@ -287,9 +296,9 @@ static bool reduce_unary(PrecedenceStack *stack)
         return false;
     }
 
-    StackItem expression = stack->items[stack->count - 1];
-    StackItem operator = stack->items[stack->count - 2];
-    StackItem mark = stack->items[stack->count - 3];
+    StackItem expression = stack->items[stack->count - 1]; /*výrazek*/
+    StackItem operator = stack->items[stack->count - 2]; /* - */
+    StackItem mark = stack->items[stack->count - 3]; /*značka*/
 
     if(mark.symbol != PREC_MARKER || operator.symbol != PREC_UNARY || expression.symbol != PREC_EXPRESSION){
         return false;
@@ -316,13 +325,11 @@ static bool reduce_unit(PrecedenceStack *stack)
         return false;
     }
 
-    StackItem right_paren = stack->items[stack->count - 1];
-    StackItem left_paren = stack->items[stack->count - 2];
-    StackItem marker = stack->items[stack->count - 3];
+    StackItem right_paren = stack->items[stack->count - 1]; /* ) */
+    StackItem left_paren = stack->items[stack->count - 2]; /* ( */
+    StackItem marker = stack->items[stack->count - 3]; /* značka */
 
-    if (marker.symbol != PREC_MARKER ||
-        left_paren.symbol != PREC_LEFT_PAREN ||
-        right_paren.symbol != PREC_RIGHT_PAREN) {
+    if (marker.symbol != PREC_MARKER || left_paren.symbol != PREC_LEFT_PAREN || right_paren.symbol != PREC_RIGHT_PAREN) {
         return false;
     }
 
@@ -341,6 +348,10 @@ static bool reduce_unit(PrecedenceStack *stack)
 // zpracování redukce na zásobníku
 static bool reduce(PrecedenceStack *stack)
 {
+    if (stack->count == 0) {
+        return false;
+    }
+
     size_t marker_index = stack->count;
 
     while (marker_index > 0) {
@@ -350,7 +361,7 @@ static bool reduce(PrecedenceStack *stack)
         }
     }
 
-    if(stack->count == 0 || stack->items[marker_index].symbol != PREC_MARKER){
+    if (stack->items[marker_index].symbol != PREC_MARKER) {
         return false;
     }
 
@@ -373,22 +384,26 @@ static bool reduce(PrecedenceStack *stack)
     } else {
         return false;
     }
-    return true;
 }
 
-// určení akce precedence tabulky
-static PrecedenceAction precedence_action(PrecedenceSymbol stack_symbol, PrecedenceSymbol input_symbol)
+// uvolní aktuální výraz při chybě
+static ASTNode *finish_expression_error(ActiveExpression *active)
 {
-    if((unsigned)stack_symbol > PREC_END || (unsigned)input_symbol > PREC_END){
-        return ACTION_ERROR;
+    PrecedenceStack *stack = active->stack;
+
+    for (size_t i = 0; i < stack->count; i++) {
+        ast_free(stack->items[i].node);
     }
 
-    return precedence_table[stack_symbol][input_symbol];
+    stack_free(stack);
+    active_expression = active->previous;
+    return NULL;
 }
 
 // zpracování výrazu s precedence tabulkou
-ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_t line_indent, bool (*starts_function_call)(void), void (*parse_function_call)(ASTNode **), void (*parse_if_expression)(ASTNode **), const char *const *stop_words)
+ASTNode *parse_precedence_expression(const ExpressionInput *input, size_t line_indent, const char *const *stop_words)
 {
+    Token *current = input->current;
     PrecedenceStack stack;
     stack_init(&stack);
     ActiveExpression active = {.stack = &stack, .previous = active_expression};
@@ -402,45 +417,47 @@ ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_
     size_t parenthesis_count = 0;
 
     while(true){
+        // pokračování výrazu na dalším řádku uvnitř závorek
         if (current->type == TOKEN_EOL && parenthesis_count > 0) {
             size_t next_line_indent;
             do{
                 next_line_indent = (size_t)current->value;
-                if (advance() != 0) {
-                    goto expression_error;
+                if (input->advance() != 0) {
+                    return finish_expression_error(&active);
                 }
             }while(current->type == TOKEN_EOL);
 
             if(current->type == TOKEN_EOF || next_line_indent <= line_indent){
-                goto expression_error;
+                return finish_expression_error(&active);
             }
         }
 
+        // přístup ke členu výrazu za tečkou
         if(token_is(current, TOKEN_SEPARATOR) && token_text_is(current, ".")){
             if(expect_operand){
-                goto expression_error;
+                return finish_expression_error(&active);
             }
 
             if(stack.items[stack.count - 1].symbol != PREC_EXPRESSION){
                 if(!reduce(&stack)) {
-                    goto expression_error;
+                    return finish_expression_error(&active);
                 }
                 continue;
             }
 
-            if (advance() != 0) {
-                goto expression_error;
+            if (input->advance() != 0) {
+                return finish_expression_error(&active);
             }
 
             if(!token_is(current, TOKEN_IDENTIFIER)){
-                goto expression_error;
+                return finish_expression_error(&active);
             }
 
             StackItem *receiver = &stack.items[stack.count - 1];
             receiver->node = ast_create_member(receiver->node, current->context);
 
-            if (advance() != 0) {
-                goto expression_error;
+            if (input->advance() != 0) {
+                return finish_expression_error(&active);
             }
 
             continue;
@@ -451,8 +468,7 @@ ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_
         if (stop_words != NULL &&
             !expect_operand &&
             parenthesis_count == 0 &&
-            (token_is(current, TOKEN_IDENTIFIER) ||
-             token_is(current, TOKEN_KEYWORD))) {
+            (token_is(current, TOKEN_IDENTIFIER) || token_is(current, TOKEN_KEYWORD))) {
 
             for (size_t i = 0; stop_words[i] != NULL; i++) {
                 if (token_text_is(current, stop_words[i])) {
@@ -468,32 +484,35 @@ ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_
             input_symbol = PREC_END;
         }
 
+        // kontrola povoleného symbolu podle toho, zda čekáme operand
         if (expect_operand) {
             bool empty_parentheses = input_symbol == PREC_RIGHT_PAREN && stack.count > 0 && stack.items[stack.count - 1].symbol == PREC_LEFT_PAREN;
             if (input_symbol != PREC_OPERAND && input_symbol != PREC_UNARY && input_symbol != PREC_LEFT_PAREN && !empty_parentheses) {
-                goto expression_error;
+                return finish_expression_error(&active);
             }
         } else {
             if (input_symbol == PREC_OPERAND || input_symbol == PREC_UNARY || input_symbol == PREC_LEFT_PAREN || input_symbol == PREC_INVALID) {
-                goto expression_error;
+                return finish_expression_error(&active);
             }
         }
 
+        // výběr akce podle nejvyššího terminálu a vstupního symbolu
         size_t top_index = stack_top_terminal_index(&stack);
         PrecedenceSymbol stack_symbol = stack.items[top_index].symbol;
 
         PrecedenceAction action = precedence_action(stack_symbol, input_symbol);
 
         if(action == ACTION_REDUCE){
+            // redukce zásobníku bez posunu vstupu
             if (!reduce(&stack)) {
-                goto expression_error;
+                return finish_expression_error(&active);
             }
         }else if(action == ACTION_SHIFT || action == ACTION_EQUAL){
             if(action == ACTION_SHIFT){
                 stack_insert_marker(&stack);
             }
 
-            bool is_function_call = input_symbol == PREC_OPERAND && starts_function_call();
+            bool is_function_call = input_symbol == PREC_OPERAND && input->identifier_followed_by(TOKEN_SEPARATOR, "(");
             bool is_if_expression = input_symbol == PREC_OPERAND && token_is_keyword(current, "if");
 
             StackItem item = {0};
@@ -501,12 +520,11 @@ ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_
             if (is_function_call || is_if_expression) {
                 item.symbol = PREC_OPERAND;
                 stack_push(&stack, item);
-                // Zásobník vlastní uzel už během načítání jeho obsahu.
                 ASTNode **destination = &stack.items[stack.count - 1].node;
                 if (is_function_call) {
-                    parse_function_call(destination);
+                    input->parse_function_call(destination);
                 } else {
-                    parse_if_expression(destination);
+                    input->parse_if_expression(destination);
                 }
             } else {
                 item = create_stack_item(current, input_symbol);
@@ -517,19 +535,19 @@ ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_
                 parenthesis_count++;
             }else if(input_symbol == PREC_RIGHT_PAREN){
                 if(parenthesis_count == 0){
-                    goto expression_error;
+                    return finish_expression_error(&active);
                 }
                 parenthesis_count--;
             }
 
              expect_operand = input_symbol != PREC_OPERAND && input_symbol != PREC_RIGHT_PAREN;
 
-             if (!is_function_call && !is_if_expression && advance() != 0) {
-                goto expression_error;
+             if (!is_function_call && !is_if_expression && input->advance() != 0) {
+                return finish_expression_error(&active);
             }
         }else if(action == ACTION_ACCEPT){
             if(expect_operand || parenthesis_count != 0 || stack.count != 2 || stack.items[0].symbol != PREC_END || stack.items[1].symbol != PREC_EXPRESSION){
-                goto expression_error;
+                return finish_expression_error(&active);
             }
 
             ASTNode *result = stack.items[1].node;
@@ -537,15 +555,7 @@ ASTNode *parse_precedence_expression(Token *current, int (*advance)(void), size_
             active_expression = active.previous;
             return result;
         }else{
-            goto expression_error;
+            return finish_expression_error(&active);
         }
     }
-
-expression_error:
-    for (size_t i = 0; i < stack.count; i++) {
-        ast_free(stack.items[i].node);
-    }
-    stack_free(&stack);
-    active_expression = active.previous;
-    return NULL;
 }
