@@ -5,7 +5,7 @@ CPPFLAGS = -Iinclude -I.
 
 SOURCES = \
     src/main.c \
-    src/lexer/main.c \
+    src/lexer/lexer.c \
     src/parser/parser.c \
     src/parser/precedence.c \
     src/parser/stack.c \

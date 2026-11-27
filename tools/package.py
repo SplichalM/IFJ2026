@@ -8,11 +8,6 @@ import zipfile
 
 
 ROOT = Path(__file__).resolve().parent.parent
-RENAMED = {
-    'src/lexer/main.c': 'lexer.c',
-    'src/semantic/main.c': 'semantic.c',
-    'src/codegen/main.c': 'codegen.c',
-}
 
 
 def source_mapping():
@@ -25,7 +20,7 @@ def source_mapping():
     destinations = set()
     for source in sources:
         relative = source.relative_to(ROOT).as_posix()
-        destination = 'src/' + RENAMED.get(relative, source.name)
+        destination = 'src/' + source.name
         if destination.lower() in destinations:
             raise ValueError('archive filename collision: ' + destination)
         destinations.add(destination.lower())

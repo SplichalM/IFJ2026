@@ -139,7 +139,7 @@
 \textbf{Martin Šplíchal}
 
 \begin{itemize}
-  \item \id{lexer.h}, \id{src/lexer/main.c}: lexikální analýza jako konečný automat
+  \item \id{lexer.h}, \id{src/lexer/lexer.c}: lexikální analýza jako konečný automat
   \begin{itemize}
     \item identifikátory a klíčová slova, číselné a řetězcové literály včetně víceřádkových
     \item vnořené komentáře, počet mezer odsazení v tokenu konce řádku
@@ -215,7 +215,7 @@ funkce mají prefix svého modulu a identifikátory jsou psány anglicky.
 
 \section{Lexikální analýza}
 
-Lexer v souboru \texttt{src/lexer/main.c} čte zdrojový program ze standardního
+Lexer v souboru \texttt{src/lexer/lexer.c} čte zdrojový program ze standardního
 vstupu a předává parseru tokeny. Rozhraní je v \texttt{include/lexer.h}.
 
 \paragraph{Čtení tokenů.}
